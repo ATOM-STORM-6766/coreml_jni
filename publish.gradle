@@ -2,7 +2,7 @@ apply plugin: 'maven-publish'
 
 def nativeName = wpilibTools.platformMapper.currentPlatform.platformName;
 def artifactGroupId = 'org.photonvision'
-def baseArtifactId = "rknn_jni"
+def baseArtifactId = "coreml_jni"
 
 def jniType = project.findProperty("PublishType") ?: "";
 println("Building with JNI publish type: " + jniType);
@@ -44,6 +44,7 @@ publishing {
 
 tasks.withType(PublishToMavenRepository) {
     doFirst {
-        println("Publishing rknn-jni to " + repository.url)
+        println("Publishing coreml-jni to " + repository.url)
     }
 }
+
