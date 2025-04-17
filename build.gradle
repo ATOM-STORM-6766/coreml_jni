@@ -73,6 +73,11 @@ test {
 }
 
 ext.nativeName = wpilibTools.platformMapper.currentPlatform.platformName;
+
+if (nativeName.equals("macx64") || nativeName.equals("macarm64")) {
+    nativeName = "osxuniversal";
+}
+
 ext.outputsFolder = file("$buildDir/outputs")
 
 println("Building for $nativeName")
