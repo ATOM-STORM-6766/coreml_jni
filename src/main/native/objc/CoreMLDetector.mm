@@ -7,8 +7,8 @@
 @interface CoreMLDetectorImpl : NSObject {
     MLModel* _model;
     MLModelConfiguration* _config;
-    float _scaleX;  // 宽度缩放比例
-    float _scaleY;  // 高度缩放比例
+    float _scaleX;  // width scale
+    float _scaleY;  // height scale
     int _barHeight;
     float _scaledHeight;
 }
@@ -20,6 +20,12 @@
 - (cv::Mat)preprocessImage:(cv::Mat)image;
 
 @end
+
+// 日志宏定义（放在文件顶部合适位置）
+#define LOG_INFO(fmt, ...) NSLog((@"[INFO][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) NSLog((@"[ERROR][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define LOG_DEBUG(fmt, ...) NSLog((@"[DEBUG][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+
 CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     cv::cvtColor(matimg, matimg, cv::COLOR_BGR2BGRA);
     
@@ -66,50 +72,50 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
 }
 
 - (cv::Mat)preprocessImage:(cv::Mat)image {
-    // 记录原始图像尺寸
-    std::printf("原始图像尺寸: (%d, %d)\n", image.cols, image.rows);
+    // Record the original image size
+    LOG_INFO("Original image size: (%d, %d)", image.cols, image.rows);
     
-    // 检查输入图像是否有效
+    // Check if the input image is valid
     if (image.empty() || image.cols <= 0 || image.rows <= 0) {
-        std::printf("错误：输入图像无效\n");
+        LOG_ERROR("Invalid input image");
         return cv::Mat();
     }
     
-    // 如果是灰度图，转换为RGB
+    // If it is a grayscale image, convert it to RGB
     if (image.channels() == 1) {
         cv::cvtColor(image, image, cv::COLOR_GRAY2RGB);
     }
     
-    // 创建缩放后的图像用于模型输入
+    // Create a scaled image for model input
     cv::Mat image_scaled = cv::Mat::zeros(640, 640, CV_8UC3);
     
-    // 计算缩放后的高度，确保不会出现极端值
+    // Calculate the scaled height to avoid extreme values
     float aspect_ratio = (float)image.rows / (float)image.cols;
     float scaled_height = 640.0f * aspect_ratio;
     
-    // 限制缩放后的高度在合理范围内
+    // Limit the scaled height to a reasonable range
     scaled_height = std::min(std::max(scaled_height, 1.0f), 640.0f);
     _barHeight = (640 - scaled_height) / 2;
     _scaledHeight = scaled_height;
     
-    std::printf("缩放后图像尺寸: (%d, %d)\n", image_scaled.cols, image_scaled.rows);
-    std::printf("缩放高度: %.2f, 上下填充高度: %d\n", scaled_height, _barHeight);
+    LOG_INFO("Scaled image size: (%d, %d)", image_scaled.cols, image_scaled.rows);
+    LOG_INFO("Scaled height: %.2f, vertical padding: %d", scaled_height, _barHeight);
     
-    // 计算缩放后的图像尺寸
+    // Calculate the size of the scaled image
     cv::Size scaled_size(640, scaled_height);
     cv::Mat resized;
     cv::resize(image, resized, scaled_size);
     
-    // 确保目标区域在有效范围内
+    // Ensure the target area is within a valid range
     int valid_height = std::min((int)scaled_height, 640 - _barHeight);
     if (_barHeight >= 0 && _barHeight < 640 && valid_height > 0) {
         resized.copyTo(image_scaled(cv::Rect(0, _barHeight, 640, valid_height)));
     } else {
-        std::printf("错误：计算出的填充高度或缩放高度无效\n");
+        LOG_ERROR("Invalid padding or scaled height calculated");
         return cv::Mat();
     }
     
-    // 保存缩放比例用于后处理
+    // Save the scaling ratio for post-processing
     _scaleX = 1.0f;
     _scaleY = scaled_height / 640.0f;
     
@@ -121,15 +127,15 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
                               imageWidth:(int)imageWidth 
                              imageHeight:(int)imageHeight
                               numClasses:(NSInteger)numClasses {
-    // 检查输入参数是否有效
+    // Check if the input parameters are valid
     if (!coords || !confs || numClasses <= 0) {
-        std::printf("错误：无效的输入参数\n");
+        LOG_ERROR("Invalid input parameters");
         DetectionResult emptyResult;
         memset(&emptyResult, 0, sizeof(DetectionResult));
         return emptyResult;
     }
     
-    // 找到最大置信度的类别
+    // Find the class with the highest confidence
     float maxConf = confs[0];
     NSInteger objClass = 0;
     
@@ -140,47 +146,46 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         }
     }
     
-    // 如果最大置信度小于阈值，认为没有检测到目标
-    if (maxConf < 0.1f) {  // 可以根据需要调整阈值
-        std::printf("未检测到目标，最大置信度: %.2f\n", maxConf);
+    // If the maximum confidence is less than the threshold, consider no object detected
+    if (maxConf < 0.1f) {
+        LOG_INFO("No object detected, max confidence: %.2f", maxConf);
         DetectionResult emptyResult;
         memset(&emptyResult, 0, sizeof(DetectionResult));
         return emptyResult;
     }
 
-    std::printf("检测到目标 - 类别: %ld, 置信度: %.2f\n", (long)objClass, maxConf);
-    std::printf("原始坐标: x=%.2f, y=%.2f, w=%.2f, h=%.2f\n", 
-                coords[0], coords[1], coords[2], coords[3]);
+    LOG_INFO("Object detected - class: %ld, confidence: %.2f", (long)objClass, maxConf);
+    LOG_DEBUG("Raw coordinates: x=%.2f, y=%.2f, w=%.2f, h=%.2f", coords[0], coords[1], coords[2], coords[3]);
     
-    // 获取归一化的坐标值
+    // Get the normalized coordinate values
     float x = coords[0] * imageWidth;
     float y = ((coords[1] * 640 - _barHeight) / _scaledHeight) * imageHeight;
     float width = coords[2] * imageWidth;
     float height = coords[3] / (_scaledHeight / 640.0f) * imageHeight;
     
-    // 验证坐标值是否在有效范围内
+    // Verify that the coordinate values are within a valid range
     if (x < 0 || y < 0 || width <= 0 || height <= 0) {
-        std::printf("错误：无效的坐标值\n");
+        LOG_ERROR("Invalid coordinate values");
         DetectionResult emptyResult;
         memset(&emptyResult, 0, sizeof(DetectionResult));
         return emptyResult;
     }
     
-    std::printf("映射后坐标: x=%.2f, y=%.2f, w=%.2f, h=%.2f\n", x, y, width, height);
+    LOG_DEBUG("Mapped coordinates: x=%.2f, y=%.2f, w=%.2f, h=%.2f", x, y, width, height);
     
-    // 计算边界框的四个角点
+    // Calculate the four corners of the bounding box
     float x1 = x - width/2;
     float y1 = y - height/2;
     float x2 = x + width/2;
     float y2 = y + height/2;
     
-    // 确保坐标在图像范围内
+    // Ensure the coordinates are within the image range
     x1 = std::max(0.0f, std::min(x1, (float)imageWidth));
     y1 = std::max(0.0f, std::min(y1, (float)imageHeight));
     x2 = std::max(0.0f, std::min(x2, (float)imageWidth));
     y2 = std::max(0.0f, std::min(y2, (float)imageHeight));
     
-    // 创建检测结果
+    // Create the detection result
     DetectionResult result;
     result.x1 = x1;
     result.y1 = y1;
@@ -193,58 +198,58 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
 }
 
 - (NSArray *)detect:(cv::Mat)image nmsThresh:(double)nmsThresh boxThresh:(double)boxThresh {
-    // 保存原始图像尺寸
+    // Save the original image size
     int originalWidth = image.cols;
     int originalHeight = image.rows;
     
-    // 前处理：缩放图像到640x640
+    // Preprocessing: scale the image to 640x640
     cv::Mat resizedImage = [self preprocessImage:image];
     if (resizedImage.empty()) {
-        std::printf("错误：图像预处理失败\n");
+        LOG_ERROR("Image preprocessing failed");
         return [NSArray array];
     }
     
-    // 将 OpenCV Mat 转换为 CVPixelBuffer
+    // Convert OpenCV Mat to CVPixelBuffer
     CVPixelBufferRef pixelBuffer = getImageBufferFromMat(resizedImage);
     if (!pixelBuffer) {
-        std::printf("错误：无法创建 CVPixelBuffer\n");
+        LOG_ERROR("Failed to create CVPixelBuffer");
         return [NSArray array];
     }
     
-    // 创建 MLFeatureValue
+    // Create MLFeatureValue
     NSError* error = nil;
     MLFeatureValue* imageFeatureValue = [MLFeatureValue featureValueWithPixelBuffer:pixelBuffer];
     
     CVPixelBufferRelease(pixelBuffer);
     
     if (!imageFeatureValue) {
-        std::printf("错误：无法创建 MLFeatureValue\n");
+        LOG_ERROR("Failed to create MLFeatureValue");
         return [NSArray array];
     }
     
-    // 创建输入特征
+    // Create input features
     NSDictionary* inputFeatures = @{@"image": imageFeatureValue};
     MLDictionaryFeatureProvider* input = [[MLDictionaryFeatureProvider alloc] initWithDictionary:inputFeatures error:&error];
     
     if (error) {
-        NSLog(@"Error creating input features: %@", error);
+        LOG_ERROR("Error creating input features: %@", error);
         return [NSArray array];
     }
     
-    // 进行预测
+    // Run prediction
     id<MLFeatureProvider> output = [_model predictionFromFeatures:input error:&error];
     
     if (error) {
-        NSLog(@"Prediction error: %@", error);
+        LOG_ERROR("Prediction error: %@", error);
         return [NSArray array];
     }
 
-    // 获取坐标和置信度
+    // Get coordinates and confidence
     MLFeatureValue* coordinatesValue = [output featureValueForName:@"coordinates"];
     MLFeatureValue* confidenceValue = [output featureValueForName:@"confidence"];
     
     if (!coordinatesValue || !confidenceValue) {
-        std::printf("错误：无法获取坐标或置信度输出\n");
+        LOG_ERROR("Failed to get coordinates or confidence output");
         return [NSArray array];
     }
     
@@ -252,39 +257,39 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     MLMultiArray* confidence = confidenceValue.multiArrayValue;
     
     if (!coordinates || !confidence) {
-        std::printf("错误：无法获取多数组值\n");
+        LOG_ERROR("Failed to get multi-array values");
         return [NSArray array];
     }
     
-    // 获取类别数量
+    // Get the number of classes
     NSInteger numClasses = [confidence.shape[1] integerValue];
     if (numClasses <= 0) {
-        std::printf("错误：无效的类别数量\n");
+        LOG_ERROR("Invalid number of classes");
         return [NSArray array];
     }
     
-    // 创建检测结果数组
+    // Create the detection results array
     NSMutableArray* results = [NSMutableArray array];
     
-    // 获取坐标和置信度值
+    // Get coordinate and confidence values
     float* coords = (float*)coordinates.dataPointer;
     float* confs = (float*)confidence.dataPointer;
     
     if (!coords || !confs) {
-        std::printf("错误：无法获取坐标或置信度数据\n");
+        LOG_ERROR("Failed to get coordinates or confidence data");
         return [NSArray array];
     }
     
-    // 处理后处理
+    // Post-processing
     DetectionResult result = [self processDetectionResult:coords 
                                               confidence:confs 
                                              imageWidth:originalWidth 
                                             imageHeight:originalHeight
                                              numClasses:numClasses];
     
-    // 检查结果是否有效
+    // Check if the result is valid
     if (result.confidence > 0) {
-        // 将结果包装为NSValue并添加到数组
+        // Wrap the result as NSValue and add to the array
         NSValue* value = [NSValue valueWithBytes:&result objCType:@encode(DetectionResult)];
         [results addObject:value];
         return results;
@@ -295,7 +300,7 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
 
 @end
 
-// C++ 实现
+// C++ Implementation
 CoreMLDetector::CoreMLDetector(const std::string& modelPath) {
     NSString* nsModelPath = [NSString stringWithUTF8String:modelPath.c_str()];
     impl_ = ( void*)[[CoreMLDetectorImpl alloc] initWithModelPath:nsModelPath];
