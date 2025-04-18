@@ -1,6 +1,10 @@
 apply plugin: 'maven-publish'
 
 def nativeName = wpilibTools.platformMapper.currentPlatform.platformName;
+if (nativeName.equals("macx64") || nativeName.equals("macarm64")) {
+    nativeName = "osxuniversal";
+}
+
 def artifactGroupId = 'org.photonvision'
 def baseArtifactId = "coreml_jni"
 
