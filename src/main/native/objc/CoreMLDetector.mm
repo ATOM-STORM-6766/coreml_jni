@@ -3,7 +3,10 @@
 #import <CoreML/CoreML.h>
 #import <Vision/Vision.h>
 
-// Objective-C 实现类
+#define LOG_INFO(fmt, ...) NSLog((@"[INFO][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) NSLog((@"[ERROR][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define LOG_DEBUG(fmt, ...) NSLog((@"[DEBUG][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+
 @interface CoreMLDetectorImpl : NSObject {
     MLModel* _model;
     MLModelConfiguration* _config;
@@ -21,10 +24,6 @@
 
 @end
 
-// 日志宏定义（放在文件顶部合适位置）
-#define LOG_INFO(fmt, ...) NSLog((@"[INFO][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#define LOG_ERROR(fmt, ...) NSLog((@"[ERROR][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#define LOG_DEBUG(fmt, ...) NSLog((@"[DEBUG][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     cv::cvtColor(matimg, matimg, cv::COLOR_BGR2BGRA);
@@ -268,11 +267,11 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         LOG_ERROR("Failed to get multi-array values");
         return [NSArray array];
     }
-    
-    // Get the number of classes
-    NSInteger numClasses = [confidence.shape[1] integerValue];
-    if (numClasses <= 0) {
-        LOG_ERROR("Invalid number of classes");
+
+    NSInteger numBoxes = [coordinates.shape[0] integerValue];   // box num
+    NSInteger numClasses = [confidence.shape[1] integerValue];  // class num
+    if (numBoxes <= 0 || numClasses <= 0) {
+        LOG_ERROR("Invalid number of boxes or classes");
         return [NSArray array];
     }
     
@@ -287,23 +286,21 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         LOG_ERROR("Failed to get coordinates or confidence data");
         return [NSArray array];
     }
-    
-    // Post-processing
-    DetectionResult result = [self processDetectionResult:coords 
-                                              confidence:confs 
-                                             imageWidth:originalWidth 
-                                            imageHeight:originalHeight
-                                             numClasses:numClasses];
-    
-    // Check if the result is valid
-    if (result.confidence > 0) {
-        // Wrap the result as NSValue and add to the array
-        NSValue* value = [NSValue valueWithBytes:&result objCType:@encode(DetectionResult)];
-        [results addObject:value];
-        return results;
+    for (NSInteger i = 0; i < numBoxes; i++) {
+        float* boxCoords = coords + i * 4; // Each box has 4 coordinates
+        float* boxConfs = confs + i * numClasses; // Each box has numClasses confidences
+        DetectionResult result = [self processDetectionResult:boxCoords
+                                                  confidence:boxConfs
+                                                 imageWidth:originalWidth
+                                                imageHeight:originalHeight
+                                                 numClasses:numClasses];
+        if (result.confidence > boxThresh) {
+            NSValue* value = [NSValue valueWithBytes:&result objCType:@encode(DetectionResult)];
+            [results addObject:value];
+        }
     }
 
-    return nil;
+    return results;
 }
 
 @end
