@@ -42,11 +42,21 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
                                 [NSNumber numberWithInt: matimg.rows], kCVPixelBufferHeightKey,
                                 [NSNumber numberWithInt: matimg.step[0]], kCVPixelBufferBytesPerRowAlignmentKey,
                                 nil];
-    CVPixelBufferRef imageBuffer;
+    CVPixelBufferRef imageBuffer = NULL;
     CVReturn status = CVPixelBufferCreate(kCFAllocatorMalloc, matimg.cols, matimg.rows, kCVPixelFormatType_32BGRA, (CFDictionaryRef) CFBridgingRetain(options), &imageBuffer) ;
-    
+    if (status != kCVReturnSuccess || imageBuffer == NULL) {
+        LOG_ERROR("Failed to create CVPixelBuffer in getImageBufferFromMat");
+        if (imageBuffer) CVPixelBufferRelease(imageBuffer);
+        return NULL;
+    }
     CVPixelBufferLockBaseAddress(imageBuffer, 0);
     void *base = CVPixelBufferGetBaseAddress(imageBuffer);
+    if (!base) {
+        LOG_ERROR("Failed to get base address for CVPixelBuffer");
+        CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
+        CVPixelBufferRelease(imageBuffer);
+        return NULL;
+    }
     memcpy(base, matimg.data, matimg.total() * matimg.elemSize());
     CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
 
@@ -219,26 +229,24 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     // Create MLFeatureValue
     NSError* error = nil;
     MLFeatureValue* imageFeatureValue = [MLFeatureValue featureValueWithPixelBuffer:pixelBuffer];
-    
-    CVPixelBufferRelease(pixelBuffer);
-    
     if (!imageFeatureValue) {
         LOG_ERROR("Failed to create MLFeatureValue");
+        CVPixelBufferRelease(pixelBuffer);
         return [NSArray array];
     }
     
     // Create input features
     NSDictionary* inputFeatures = @{@"image": imageFeatureValue};
     MLDictionaryFeatureProvider* input = [[MLDictionaryFeatureProvider alloc] initWithDictionary:inputFeatures error:&error];
-    
     if (error) {
         LOG_ERROR("Error creating input features: %@", error);
+        CVPixelBufferRelease(pixelBuffer);
         return [NSArray array];
     }
     
     // Run prediction
     id<MLFeatureProvider> output = [_model predictionFromFeatures:input error:&error];
-    
+    CVPixelBufferRelease(pixelBuffer);
     if (error) {
         LOG_ERROR("Prediction error: %@", error);
         return [NSArray array];
@@ -307,10 +315,7 @@ CoreMLDetector::CoreMLDetector(const std::string& modelPath) {
 }
 
 CoreMLDetector::~CoreMLDetector() {
-    if (impl_) {
-        CoreMLDetectorImpl* obj = (CoreMLDetectorImpl*)impl_;
-        obj = nil;
-    }
+    // ARC will manage Objective-C object memory, no need to set to nil
 }
 
 void CoreMLDetector::setCoreMask(int coreMask) {
