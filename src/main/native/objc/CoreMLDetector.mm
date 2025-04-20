@@ -6,6 +6,7 @@
 #define LOG_INFO(fmt, ...) NSLog((@"[INFO][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
 #define LOG_ERROR(fmt, ...) NSLog((@"[ERROR][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
 #define LOG_DEBUG(fmt, ...) NSLog((@"[DEBUG][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define LOG_PERF(fmt, ...) NSLog((@"[PERF][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)    
 
 @interface CoreMLDetectorImpl : NSObject {
     MLModel* _model;
@@ -81,9 +82,6 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
 }
 
 - (cv::Mat)preprocessImage:(cv::Mat)image {
-    // Record the original image size
-    LOG_INFO("Original image size: (%d, %d)", image.cols, image.rows);
-    
     // Check if the input image is valid
     if (image.empty() || image.cols <= 0 || image.rows <= 0) {
         LOG_ERROR("Invalid input image");
@@ -106,9 +104,6 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     scaled_height = std::min(std::max(scaled_height, 1.0f), 640.0f);
     _barHeight = (640 - scaled_height) / 2;
     _scaledHeight = scaled_height;
-    
-    LOG_INFO("Scaled image size: (%d, %d)", image_scaled.cols, image_scaled.rows);
-    LOG_INFO("Scaled height: %.2f, vertical padding: %d", scaled_height, _barHeight);
     
     // Calculate the size of the scaled image
     cv::Size scaled_size(640, scaled_height);
@@ -157,15 +152,11 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     
     // If the maximum confidence is less than the threshold, consider no object detected
     if (maxConf < 0.1f) {
-        LOG_INFO("No object detected, max confidence: %.2f", maxConf);
         DetectionResult emptyResult;
         memset(&emptyResult, 0, sizeof(DetectionResult));
         return emptyResult;
     }
 
-    LOG_INFO("Object detected - class: %ld, confidence: %.2f", (long)objClass, maxConf);
-    LOG_DEBUG("Raw coordinates: x=%.2f, y=%.2f, w=%.2f, h=%.2f", coords[0], coords[1], coords[2], coords[3]);
-    
     // Get the normalized coordinate values
     float x = coords[0] * imageWidth;
     float y = ((coords[1] * 640 - _barHeight) / _scaledHeight) * imageHeight;
@@ -179,8 +170,6 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         memset(&emptyResult, 0, sizeof(DetectionResult));
         return emptyResult;
     }
-    
-    LOG_DEBUG("Mapped coordinates: x=%.2f, y=%.2f, w=%.2f, h=%.2f", x, y, width, height);
     
     // Calculate the four corners of the bounding box
     float x1 = x - width/2;
@@ -207,6 +196,8 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
 }
 
 - (NSArray *)detect:(cv::Mat)image nmsThresh:(double)nmsThresh boxThresh:(double)boxThresh {
+    NSDate *startTime = [NSDate date];
+    
     // Save the original image size
     int originalWidth = image.cols;
     int originalHeight = image.rows;
@@ -217,6 +208,9 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         LOG_ERROR("Image preprocessing failed");
         return [NSArray array];
     }
+    
+    NSTimeInterval preprocessTime = -[startTime timeIntervalSinceNow];
+    LOG_PERF("Preprocess time: %.3f ms", preprocessTime * 1000);
     
     // Convert OpenCV Mat to CVPixelBuffer
     CVPixelBufferRef pixelBuffer = getImageBufferFromMat(resizedImage);
@@ -243,6 +237,8 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         return [NSArray array];
     }
     
+    NSDate *inferenceStartTime = [NSDate date];
+    
     // Run prediction
     id<MLFeatureProvider> output = [_model predictionFromFeatures:input error:&error];
     CVPixelBufferRelease(pixelBuffer);
@@ -250,6 +246,9 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         LOG_ERROR("Prediction error: %@", error);
         return [NSArray array];
     }
+    
+    NSTimeInterval inferenceTime = -[inferenceStartTime timeIntervalSinceNow];
+    LOG_PERF("Model inference time: %.3f ms", inferenceTime * 1000);
 
     // Get coordinates and confidence
     MLFeatureValue* coordinatesValue = [output featureValueForName:@"coordinates"];
@@ -275,6 +274,8 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         return [NSArray array];
     }
     
+    NSDate *postprocessStartTime = [NSDate date];
+    
     // Create the detection results array
     NSMutableArray* results = [NSMutableArray array];
     
@@ -299,6 +300,14 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
             [results addObject:value];
         }
     }
+    
+    // 记录后处理耗时
+    NSTimeInterval postprocessTime = -[postprocessStartTime timeIntervalSinceNow];
+    LOG_PERF("Postprocess time: %.3f ms", postprocessTime * 1000);
+    
+    // 记录总耗时
+    NSTimeInterval totalTime = -[startTime timeIntervalSinceNow];
+    LOG_PERF("Total processing time: %.3f ms", totalTime * 1000);
 
     return results;
 }

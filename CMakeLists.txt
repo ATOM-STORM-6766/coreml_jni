@@ -2,10 +2,11 @@ cmake_minimum_required(VERSION 3.24)
 
 project(coreml_jni)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 设置 Objective-C++ 编译选项
 if(APPLE)
     set(CMAKE_OBJCXX_STANDARD 17)
     set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
@@ -46,14 +47,7 @@ list(REMOVE_ITEM OPENCV_LIB_PATH "${opencv_lib_SOURCE_DIR}/osx/universal/shared/
 SET(OPENCV_INCLUDE_PATH ${opencv_header_SOURCE_DIR})
 message("OpenCV libraries found: ${OPENCV_LIB_PATH}")
 
-if(APPLE)
-    set(JAVA_HOME "$ENV{JAVA_HOME}")
-    set(JAVA_INCLUDE_PATH "${JAVA_HOME}/include")
-    set(JAVA_INCLUDE_PATH2 "${JAVA_HOME}/include/darwin")
-    set(JAVA_AWT_LIBRARY "${JAVA_HOME}/lib/libjawt.dylib")
-    set(JAVA_AWT_INCLUDE_PATH "${JAVA_HOME}/include/darwin")
-endif()
-
+find_package(Java REQUIRED)
 find_package(JNI REQUIRED)
 if(JNI_FOUND)
     # Fixes odd AWT dependency
