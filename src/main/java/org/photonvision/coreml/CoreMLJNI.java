@@ -20,21 +20,52 @@ package org.photonvision.coreml;
 import org.opencv.core.Point;
 import org.opencv.core.Rect2d;
 
+/**
+ * JNI bindings for interacting with the native CoreML inference library.
+ * Provides methods to load models, run inference, and manage native resources.
+ */
 public class CoreMLJNI {
+    /**
+     * Specifies the version of the YOLO model being used.
+     * This affects how the raw detections are processed.
+     */
     public static enum ModelVersion {
+        /** You Only Look Once v5 */
         YOLO_V5,
+        /** You Only Look Once v8 */
         YOLO_V8,
-        YOLO_V11
+        /** You Only Look Once v11 (hypothetical or future version) */
+        YOLO_V11 // TODO: Check if YOLOv11 is a standard or custom version.
     }
 
+    /**
+     * Specifies which processing units the CoreML model can utilize.
+     */
     public static enum CoreMask {
+        /** Use only the CPU. */
         CPU_ONLY,
+        /** Use the CPU and the integrated GPU. */
         CPU_AND_GPU,
+        /** Use all available processing units (CPU, GPU, Neural Engine). */
         ALL,
+        /** Use the CPU and the Apple Neural Engine (ANE). */
         CPU_AND_NEURAL_ENGINE
     }
 
+    /**
+     * Represents a single detection result from the CoreML model.
+     */
     public static class CoreMLResult {
+        /**
+         * Constructs a CoreMLResult.
+         *
+         * @param left The x-coordinate of the top-left corner of the bounding box.
+         * @param top The y-coordinate of the top-left corner of the bounding box.
+         * @param right The x-coordinate of the bottom-right corner of the bounding box.
+         * @param bottom The y-coordinate of the bottom-right corner of the bounding box.
+         * @param conf The confidence score of the detection (typically 0.0 to 1.0).
+         * @param class_id The integer ID of the detected class.
+         */
         public CoreMLResult(
             int left, int top, int right, int bottom, float conf, int class_id
         ) {
@@ -43,8 +74,11 @@ public class CoreMLJNI {
             this.rect = new Rect2d(new Point(left, top), new Point(right, bottom));
         }
         
+        /** The bounding box of the detection. */
         public final Rect2d rect;
+        /** The confidence score associated with this detection. */
         public final float conf;
+        /** The identifier for the detected class. */
         public final int class_id;
 
         @Override
@@ -89,6 +123,7 @@ public class CoreMLJNI {
      * @param modelPath Absolute path to the model on disk
      * @param numClasses How many classes. MUST MATCH or native code segfaults
      * @param modelVer Which model is being used. Detections will be incorrect if not set to corrresponding model.
+     * @param coreMask Which compute unit to use.
      * @return Pointer to the detector in native memory
      */
     public static native long create(String modelPath, int numClasses, int modelVer, CoreMask coreMask);
@@ -104,15 +139,17 @@ public class CoreMLJNI {
     
     /**
      * Delete all native resources assocated with a detector
+     * @param ptr Pointer to detector in native memory
      */
-    public static native long destroy(long ptr);
+    public static native void destroy(long ptr);
 
     /**
      * Run detction
      * @param detectorPtr Pointer to detector created above
      * @param imagePtr Pointer to a cv::Mat input image
-     * @param nmsThresh 
-     * @param boxThresh
+     * @param nmsThresh Non-Maximum Suppression threshold
+     * @param boxThresh Bounding box confidence threshold
+     * @return Array of CoreMLResult objects containing the detection results
      */
     public static native CoreMLResult[] detect(
         long detectorPtr, long imagePtr, double nmsThresh, double boxThresh
