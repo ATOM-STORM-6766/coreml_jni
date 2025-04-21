@@ -69,13 +69,21 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
 
 - (instancetype)initWithModelPath:(NSString *)modelPath {
     self = [super init];
+    NSError* error = nil;
+
     if (self) {
         NSURL* modelURL = [NSURL fileURLWithPath:modelPath];
-        NSURL* compiledURL = [MLModel compileModelAtURL:modelURL error:nil];
+        NSURL* compiledURL = [MLModel compileModelAtURL:modelURL error:&error];
         
         _config = [[MLModelConfiguration alloc] init];
-        _model = [MLModel modelWithContentsOfURL:compiledURL configuration:_config error:nil];
+        _model = [MLModel modelWithContentsOfURL:compiledURL configuration:_config error:&error];
     }
+
+    if (error) {
+        LOG_ERROR("Error creating MLModel: %@", error);
+        return nil;
+    }
+
     return self;
 }
 
@@ -328,7 +336,11 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
 // C++ Implementation
 CoreMLDetector::CoreMLDetector(const std::string& modelPath) {
     NSString* nsModelPath = [NSString stringWithUTF8String:modelPath.c_str()];
-    impl_ = ( void*)[[CoreMLDetectorImpl alloc] initWithModelPath:nsModelPath];
+    CoreMLDetectorImpl* detector = [[CoreMLDetectorImpl alloc] initWithModelPath:nsModelPath];
+    if (detector == nil) {
+        throw std::runtime_error("Failed to initialize CoreMLDetector");
+    }
+    impl_ = (void*)detector;
 }
 
 CoreMLDetector::~CoreMLDetector() {
@@ -344,7 +356,7 @@ std::vector<DetectionResult> CoreMLDetector::detect(const cv::Mat& image, double
     CoreMLDetectorImpl* obj = (__bridge CoreMLDetectorImpl*)impl_;
     NSArray* results = [obj detect:image nmsThresh:nmsThresh boxThresh:boxThresh];
     
-    std::vector<DetectionResult> detections;
+    std::vector<DetectionResult> detections{};
     if (results) {
         for (NSValue* resultValue in results) {
             DetectionResult result;
