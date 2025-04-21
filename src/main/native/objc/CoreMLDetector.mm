@@ -11,10 +11,11 @@
 @interface CoreMLDetectorImpl : NSObject {
     MLModel* _model;
     MLModelConfiguration* _config;
-    float _scaleX;  // width scale
-    float _scaleY;  // height scale
-    int _barHeight;
-    float _scaledHeight;
+    NSInteger _inputWidth; // Model input width
+    NSInteger _inputHeight; // Model input height
+    float _scaleFactor; // Scale factor used in preprocessing
+    float _padWidth;    // Width padding used in preprocessing
+    float _padHeight;   // Height padding used in preprocessing
 }
 
 - (instancetype)initWithModelPath:(NSString *)modelPath;
@@ -77,6 +78,35 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         
         _config = [[MLModelConfiguration alloc] init];
         _model = [MLModel modelWithContentsOfURL:compiledURL configuration:_config error:&error];
+
+        if (!_model) {
+            LOG_ERROR("Error creating MLModel: %@", error);
+            return nil;
+        }
+
+        // Get model description and input image size
+        MLModelDescription *modelDescription = _model.modelDescription;
+        NSDictionary<NSString *, MLFeatureDescription *> *inputDescriptions = modelDescription.inputDescriptionsByName;
+        // Assuming the image input name is "image". Adjust if necessary.
+        MLFeatureDescription *imageInputDescription = inputDescriptions[@"image"]; 
+        
+        if (imageInputDescription && imageInputDescription.type == MLFeatureTypeImage) {
+            MLImageConstraint *imageConstraint = imageInputDescription.imageConstraint;
+            _inputWidth = imageConstraint.pixelsWide;
+            _inputHeight = imageConstraint.pixelsHigh;
+
+            if (_inputWidth <= 0 || _inputHeight <= 0) {
+                 LOG_ERROR("Invalid input dimensions retrieved from model: %ld x %ld", _inputWidth, _inputHeight);
+                 // Fallback to default or handle error appropriately
+                 // For now, let's return nil if we can't get valid dimensions
+                 return nil;
+            }
+        } else {
+            LOG_ERROR("Could not find image input description named 'image' or it's not an image type.");
+            // Handle error: maybe fallback to a default size or return nil
+            // For now, let's return nil
+             return nil;
+        }
     }
 
     if (error) {
@@ -110,36 +140,44 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         cv::cvtColor(image, image, cv::COLOR_GRAY2RGB);
     }
     
-    // Create a scaled image for model input
-    cv::Mat image_scaled = cv::Mat::zeros(640, 640, CV_8UC3);
+    // --- Preprocessing with dynamic input size ---
+    // Calculate scaling factor to fit within _inputWidth x _inputHeight while preserving aspect ratio
+    _scaleFactor = std::min((float)_inputWidth / image.cols, (float)_inputHeight / image.rows);
     
-    // Calculate the scaled height to avoid extreme values
-    float aspect_ratio = (float)image.rows / (float)image.cols;
-    float scaled_height = 640.0f * aspect_ratio;
+    // Calculate new dimensions after scaling
+    int new_w = round(image.cols * _scaleFactor);
+    int new_h = round(image.rows * _scaleFactor);
     
-    // Limit the scaled height to a reasonable range
-    scaled_height = std::min(std::max(scaled_height, 1.0f), 640.0f);
-    _barHeight = (640 - scaled_height) / 2;
-    _scaledHeight = scaled_height;
-    
-    // Calculate the size of the scaled image
-    cv::Size scaled_size(640, scaled_height);
-    cv::Mat resized;
-    cv::resize(image, resized, scaled_size);
-    
-    // Ensure the target area is within a valid range
-    int valid_height = std::min((int)scaled_height, 640 - _barHeight);
-    if (_barHeight >= 0 && _barHeight < 640 && valid_height > 0) {
-        resized.copyTo(image_scaled(cv::Rect(0, _barHeight, 640, valid_height)));
-    } else {
-        LOG_ERROR("Invalid padding or scaled height calculated");
+    // Ensure new dimensions are valid
+    if (new_w <= 0 || new_h <= 0) {
+        LOG_ERROR("Invalid scaled dimensions calculated: %d x %d", new_w, new_h);
         return cv::Mat();
     }
-    
-    // Save the scaling ratio for post-processing
-    _scaleX = 1.0f;
-    _scaleY = scaled_height / 640.0f;
-    
+
+    // Calculate padding
+    _padWidth = (_inputWidth - new_w) / 2.0f;
+    _padHeight = (_inputHeight - new_h) / 2.0f;
+
+    // Resize the image
+    cv::Mat resized;
+    cv::resize(image, resized, cv::Size(new_w, new_h));
+
+    // Create the final scaled/padded image buffer for the model
+    cv::Mat image_scaled = cv::Mat::zeros(_inputHeight, _inputWidth, CV_8UC3);
+
+    // Define the Region of Interest (ROI) in the scaled image where the resized image will be copied
+    cv::Rect roi(round(_padWidth), round(_padHeight), new_w, new_h);
+
+    // Ensure ROI is within the bounds of image_scaled
+    if (roi.x >= 0 && roi.y >= 0 && roi.width > 0 && roi.height > 0 &&
+        roi.x + roi.width <= image_scaled.cols && roi.y + roi.height <= image_scaled.rows) {
+        // Copy the resized image into the center of the black canvas
+        resized.copyTo(image_scaled(roi));
+    } else {
+        LOG_ERROR("Invalid ROI calculated for padding: x=%d, y=%d, w=%d, h=%d. Canvas size: %dx%d", 
+                  roi.x, roi.y, roi.width, roi.height, image_scaled.cols, image_scaled.rows);
+        return cv::Mat();
+    }
     return image_scaled;
 }
 
@@ -174,27 +212,29 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         return emptyResult;
     }
 
-    // Get the normalized coordinate values
-    float x = coords[0] * imageWidth;
-    float y = ((coords[1] * 640 - _barHeight) / _scaledHeight) * imageHeight;
-    float width = coords[2] * imageWidth;
-    float height = coords[3] / (_scaledHeight / 640.0f) * imageHeight;
+    // --- Coordinate Transformation based on new preprocessing ---
+    // Model outputs coordinates relative to the _inputWidth x _inputHeight padded image
+    // coords[0] = center_x, coords[1] = center_y, coords[2] = width, coords[3] = height (normalized 0-1)
     
-    // Verify that the coordinate values are within a valid range
-    if (x < 0 || y < 0 || width <= 0 || height <= 0) {
-        LOG_ERROR("Invalid coordinate values");
-        DetectionResult emptyResult;
-        memset(&emptyResult, 0, sizeof(DetectionResult));
-        return emptyResult;
-    }
+    // Convert normalized coordinates to absolute coordinates in the scaled/padded image space
+    float abs_cx = coords[0] * _inputWidth;
+    float abs_cy = coords[1] * _inputHeight;
+    float abs_w = coords[2] * _inputWidth;
+    float abs_h = coords[3] * _inputHeight;
+
+    // Revert padding and scaling to get coordinates in the original image space
+    float orig_cx = (abs_cx - _padWidth) / _scaleFactor;
+    float orig_cy = (abs_cy - _padHeight) / _scaleFactor;
+    float orig_w = abs_w / _scaleFactor;
+    float orig_h = abs_h / _scaleFactor;
+
+    // Calculate the four corners of the bounding box in original image coordinates
+    float x1 = orig_cx - orig_w / 2.0f;
+    float y1 = orig_cy - orig_h / 2.0f;
+    float x2 = orig_cx + orig_w / 2.0f;
+    float y2 = orig_cy + orig_h / 2.0f;
     
-    // Calculate the four corners of the bounding box
-    float x1 = x - width/2;
-    float y1 = y - height/2;
-    float x2 = x + width/2;
-    float y2 = y + height/2;
-    
-    // Ensure the coordinates are within the image range
+    // Ensure the coordinates are within the original image range
     x1 = std::max(0.0f, std::min(x1, (float)imageWidth));
     y1 = std::max(0.0f, std::min(y1, (float)imageHeight));
     x2 = std::max(0.0f, std::min(x2, (float)imageWidth));
@@ -236,18 +276,33 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         return [NSArray array];
     }
     
+    // --- Adjust MLFeatureValue creation if necessary ---
+    // Check if the model actually expects explicit iou/confidence thresholds as input
+    // Many detection models (like YOLO) handle this internally or in post-processing layers.
+    // If they are NOT part of the model's expected input (check modelDescription.inputDescriptionsByName), remove them.
+    
+    // Get model input description again to verify expected inputs
+    MLModelDescription *modelDesc = _model.modelDescription;
+    NSDictionary<NSString *, MLFeatureDescription *> *inputsDesc = modelDesc.inputDescriptionsByName;
+
     // Create MLFeatureValue
     NSError* error = nil;
     MLFeatureValue* imageFeatureValue = [MLFeatureValue featureValueWithPixelBuffer:pixelBuffer];
-    MLFeatureValue* iouThresholdValue = [MLFeatureValue featureValueWithDouble:nmsThresh];
-    MLFeatureValue* confidenceThresholdValue = [MLFeatureValue featureValueWithDouble:boxThresh];
     
-    // Build input feature dictionary
-    NSDictionary* inputFeatures = @{
-        @"image": imageFeatureValue,
-        @"iouThreshold": iouThresholdValue,
-        @"confidenceThreshold": confidenceThresholdValue
-    };
+    // Build input feature dictionary Dynamically
+    NSMutableDictionary* inputFeatures = [NSMutableDictionary dictionary];
+    inputFeatures[@"image"] = imageFeatureValue; // Assuming "image" is the correct input name
+
+    // Conditionally add other inputs if the model expects them
+    if (inputsDesc[@"iouThreshold"]) {
+        MLFeatureValue* iouThresholdValue = [MLFeatureValue featureValueWithDouble:nmsThresh];
+        inputFeatures[@"iouThreshold"] = iouThresholdValue;
+    }
+    
+    if (inputsDesc[@"confidenceThreshold"]) {
+        MLFeatureValue* confidenceThresholdValue = [MLFeatureValue featureValueWithDouble:boxThresh];
+        inputFeatures[@"confidenceThreshold"] = confidenceThresholdValue;
+    }
     
     MLDictionaryFeatureProvider* input = [[MLDictionaryFeatureProvider alloc] 
                                         initWithDictionary:inputFeatures error:&error];
