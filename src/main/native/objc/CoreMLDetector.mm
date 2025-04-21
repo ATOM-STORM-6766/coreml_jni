@@ -3,10 +3,42 @@
 #import <CoreML/CoreML.h>
 #import <Vision/Vision.h>
 
-#define LOG_INFO(fmt, ...) NSLog((@"[INFO][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+// Define Log Levels
+#define LOG_LEVEL_NONE  0
+#define LOG_LEVEL_ERROR 1
+#define LOG_LEVEL_INFO  2
+#define LOG_LEVEL_PERF  3
+#define LOG_LEVEL_DEBUG 4
+
+// Set default log level if not defined by compiler/CMake
+#ifndef CURRENT_LOG_LEVEL
+#define CURRENT_LOG_LEVEL LOG_LEVEL_INFO // Default to INFO level
+#endif
+
+// Conditional Logging Macros
+#if CURRENT_LOG_LEVEL >= LOG_LEVEL_ERROR
 #define LOG_ERROR(fmt, ...) NSLog((@"[ERROR][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#else
+#define LOG_ERROR(fmt, ...) do {} while(0)
+#endif
+
+#if CURRENT_LOG_LEVEL >= LOG_LEVEL_INFO
+#define LOG_INFO(fmt, ...) NSLog((@"[INFO][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#else
+#define LOG_INFO(fmt, ...) do {} while(0)
+#endif
+
+#if CURRENT_LOG_LEVEL >= LOG_LEVEL_PERF
+#define LOG_PERF(fmt, ...) NSLog((@"[PERF][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#else
+#define LOG_PERF(fmt, ...) do {} while(0)
+#endif
+
+#if CURRENT_LOG_LEVEL >= LOG_LEVEL_DEBUG
 #define LOG_DEBUG(fmt, ...) NSLog((@"[DEBUG][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#define LOG_PERF(fmt, ...) NSLog((@"[PERF][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)    
+#else
+#define LOG_DEBUG(fmt, ...) do {} while(0)
+#endif
 
 @interface CoreMLDetectorImpl : NSObject {
     MLModel* _model;
@@ -395,7 +427,7 @@ CoreMLDetector::CoreMLDetector(const std::string& modelPath) {
     if (detector == nil) {
         throw std::runtime_error("Failed to initialize CoreMLDetector");
     }
-    impl_ = (void*)detector;
+    impl_ = (__bridge void*)detector;
 }
 
 CoreMLDetector::~CoreMLDetector() {

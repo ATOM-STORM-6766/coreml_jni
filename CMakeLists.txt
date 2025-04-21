@@ -61,6 +61,11 @@ file(GLOB_RECURSE SOURCES
     "src/main/native/objc/*.mm"
 )
 
+# Option to control the compile-time log level
+# 0: NONE, 1: ERROR, 2: INFO, 3: PERF, 4: DEBUG
+set(COMPILE_LOG_LEVEL 2 CACHE STRING "Set compile-time log level (0=NONE, 1=ERROR, 2=INFO, 3=PERF, 4=DEBUG)")
+message(STATUS "Compile Log Level set to: ${COMPILE_LOG_LEVEL}")
+
 add_library(${PROJECT_NAME} SHARED
     ${SOURCES}
 )
@@ -85,6 +90,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${JNI_INCLUDE_DIRS}
     ${OPENCV_INCLUDE_PATH}
 )
+
+# Pass the log level definition to the compiler
+target_compile_definitions(${PROJECT_NAME} PRIVATE CURRENT_LOG_LEVEL=${COMPILE_LOG_LEVEL})
 
 set_target_properties(${PROJECT_NAME}
     PROPERTIES

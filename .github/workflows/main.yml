@@ -19,14 +19,17 @@ jobs:
             publish-type: ''
             extra-cmake-args: ''
             jar-name: 'Release'
+            log-level: 2 # INFO
           - build-type: Debug
             publish-type: 'debug'
             extra-cmake-args: ''
             jar-name: 'Debug'
+            log-level: 4 # DEBUG
           - build-type: Debug
             publish-type: 'debugwithasan'
             extra-cmake-args: '-DENABLE_ASAN=ON'
             jar-name: 'DebugWithAsan'
+            log-level: 4 # DEBUG
 
     steps:
       - uses: actions/checkout@v3
@@ -49,7 +52,7 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -B cmake_build -S . -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCMAKE_INSTALL_PREFIX=cmake_build -DOPENCV_ARCH=osxuniversal ${{ matrix.extra-cmake-args }}
+          cmake -B cmake_build -S . -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DCOMPILE_LOG_LEVEL=${{ matrix.log-level }} -DCMAKE_INSTALL_PREFIX=cmake_build -DOPENCV_ARCH=osxuniversal ${{ matrix.extra-cmake-args }}
           cmake --build cmake_build --target install -- -j 4
 
       - run: find .
