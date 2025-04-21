@@ -55,8 +55,7 @@ JNIEXPORT jint JNICALL Java_org_photonvision_coreml_CoreMLJNI_setCoreMask
   (JNIEnv *env, jclass, jlong ptr, jint desiredCore)
 {
     CoreMLContext* context = reinterpret_cast<CoreMLContext*>(ptr);
-    context->detector->setCoreMask(desiredCore);
-    return 0;
+    return context->detector->setCoreMask(desiredCore);
 }
 
 JNIEXPORT void JNICALL Java_org_photonvision_coreml_CoreMLJNI_destroy

@@ -27,6 +27,13 @@ public class CoreMLJNI {
         YOLO_V11
     }
 
+    public static enum CoreMask {
+        CPU_ONLY,
+        CPU_AND_GPU,
+        ALL,
+        CPU_AND_NEURAL_ENGINE
+    }
+
     public static class CoreMLResult {
         public CoreMLResult(
             int left, int top, int right, int bottom, float conf, int class_id
@@ -84,7 +91,7 @@ public class CoreMLJNI {
      * @param modelVer Which model is being used. Detections will be incorrect if not set to corrresponding model.
      * @return Pointer to the detector in native memory
      */
-    public static native long create(String modelPath, int numClasses, int modelVer, int coreNum);
+    public static native long create(String modelPath, int numClasses, int modelVer, CoreMask coreMask);
 
     /**
      * Given an already running detector, change the bitmask controlling which
@@ -93,7 +100,7 @@ public class CoreMLJNI {
      * @param desiredCore Which of the three cores to operate on
      * @return return code of call, indicating success or failure
      */
-    public static native int setCoreMask(long ptr, int desiredCore);
+    public static native int setCoreMask(long ptr, CoreMask desiredCore);
     
     /**
      * Delete all native resources assocated with a detector

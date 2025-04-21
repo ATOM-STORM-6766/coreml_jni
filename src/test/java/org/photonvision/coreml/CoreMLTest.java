@@ -42,11 +42,11 @@ public class CoreMLTest {
                 .toString();
 
         // Test create
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V5.ordinal(), 1);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V5.ordinal(), CoreMLJNI.CoreMask.ALL);
         assertNotNull(ptr);
 
         // Test setCoreMask
-        int ret = CoreMLJNI.setCoreMask(ptr, 1);
+        int ret = CoreMLJNI.setCoreMask(ptr, CoreMLJNI.CoreMask.ALL);
         assertEquals(0, ret);
 
         // Test detect

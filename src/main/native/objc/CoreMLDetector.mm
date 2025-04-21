@@ -19,7 +19,7 @@
 
 - (instancetype)initWithModelPath:(NSString *)modelPath;
 - (NSArray *)detect:(cv::Mat)image nmsThresh:(double)nmsThresh boxThresh:(double)boxThresh;
-- (void)setCoreMask:(int)coreMask;
+- (int)setCoreMask:(int)coreMask;
 - (DetectionResult)processDetectionResult:(float*)coords confidence:(float*)confs imageWidth:(int)imageWidth imageHeight:(int)imageHeight numClasses:(NSInteger)numClasses;
 - (cv::Mat)preprocessImage:(cv::Mat)image;
 
@@ -42,12 +42,14 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
                                 [NSNumber numberWithInt: matimg.rows], kCVPixelBufferHeightKey,
                                 [NSNumber numberWithInt: matimg.step[0]], kCVPixelBufferBytesPerRowAlignmentKey,
                                 nil];
-    CVPixelBufferRef imageBuffer = NULL;
+    CVPixelBufferRef imageBuffer = nullptr;
     CVReturn status = CVPixelBufferCreate(kCFAllocatorMalloc, matimg.cols, matimg.rows, kCVPixelFormatType_32BGRA, (CFDictionaryRef) CFBridgingRetain(options), &imageBuffer) ;
-    if (status != kCVReturnSuccess || imageBuffer == NULL) {
+    if (status != kCVReturnSuccess || imageBuffer == nullptr) {
         LOG_ERROR("Failed to create CVPixelBuffer in getImageBufferFromMat");
-        if (imageBuffer) CVPixelBufferRelease(imageBuffer);
-        return NULL;
+        if (imageBuffer) {
+            CVPixelBufferRelease(imageBuffer);
+        }
+        return nullptr;
     }
     CVPixelBufferLockBaseAddress(imageBuffer, 0);
     void *base = CVPixelBufferGetBaseAddress(imageBuffer);
@@ -55,7 +57,7 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         LOG_ERROR("Failed to get base address for CVPixelBuffer");
         CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
         CVPixelBufferRelease(imageBuffer);
-        return NULL;
+        return nullptr;
     }
     memcpy(base, matimg.data, matimg.total() * matimg.elemSize());
     CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
@@ -77,8 +79,15 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     return self;
 }
 
-- (void)setCoreMask:(int)coreMask {
-    _config.computeUnits = MLComputeUnitsAll;
+// Set the compute units for the model, return YES if successful, NO otherwise
+- (int)setCoreMask:(int)coreMask {
+    @try {
+        _config.computeUnits = (MLComputeUnits)coreMask;
+        return 0; // Success
+    } @catch (NSException *exception) {
+        LOG_ERROR("Exception in setCoreMask: %s", [[exception reason] UTF8String]);
+        return -1; // Failure
+    }
 }
 
 - (cv::Mat)preprocessImage:(cv::Mat)image {
@@ -222,15 +231,19 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     // Create MLFeatureValue
     NSError* error = nil;
     MLFeatureValue* imageFeatureValue = [MLFeatureValue featureValueWithPixelBuffer:pixelBuffer];
-    if (!imageFeatureValue) {
-        LOG_ERROR("Failed to create MLFeatureValue");
-        CVPixelBufferRelease(pixelBuffer);
-        return [NSArray array];
-    }
+    MLFeatureValue* iouThresholdValue = [MLFeatureValue featureValueWithDouble:nmsThresh];
+    MLFeatureValue* confidenceThresholdValue = [MLFeatureValue featureValueWithDouble:boxThresh];
     
-    // Create input features
-    NSDictionary* inputFeatures = @{@"image": imageFeatureValue};
-    MLDictionaryFeatureProvider* input = [[MLDictionaryFeatureProvider alloc] initWithDictionary:inputFeatures error:&error];
+    // Build input feature dictionary
+    NSDictionary* inputFeatures = @{
+        @"image": imageFeatureValue,
+        @"iouThreshold": iouThresholdValue,
+        @"confidenceThreshold": confidenceThresholdValue
+    };
+    
+    MLDictionaryFeatureProvider* input = [[MLDictionaryFeatureProvider alloc] 
+                                        initWithDictionary:inputFeatures error:&error];
+    
     if (error) {
         LOG_ERROR("Error creating input features: %@", error);
         CVPixelBufferRelease(pixelBuffer);
@@ -270,7 +283,6 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     NSInteger numBoxes = [coordinates.shape[0] integerValue];   // box num
     NSInteger numClasses = [confidence.shape[1] integerValue];  // class num
     if (numBoxes <= 0 || numClasses <= 0) {
-        LOG_ERROR("Invalid number of boxes or classes");
         return [NSArray array];
     }
     
@@ -291,21 +303,20 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         float* boxCoords = coords + i * 4; // Each box has 4 coordinates
         float* boxConfs = confs + i * numClasses; // Each box has numClasses confidences
         DetectionResult result = [self processDetectionResult:boxCoords
-                                                  confidence:boxConfs
-                                                 imageWidth:originalWidth
-                                                imageHeight:originalHeight
-                                                 numClasses:numClasses];
-        if (result.confidence > boxThresh) {
-            NSValue* value = [NSValue valueWithBytes:&result objCType:@encode(DetectionResult)];
-            [results addObject:value];
-        }
+                                                 confidence:boxConfs
+                                                imageWidth:image.cols
+                                               imageHeight:image.rows
+                                                numClasses:numClasses];
+        
+        NSValue* value = [NSValue valueWithBytes:&result objCType:@encode(DetectionResult)];
+        [results addObject:value];
     }
     
-    // 记录后处理耗时
+    // Record post-processing time
     NSTimeInterval postprocessTime = -[postprocessStartTime timeIntervalSinceNow];
     LOG_PERF("Postprocess time: %.3f ms", postprocessTime * 1000);
     
-    // 记录总耗时
+    // Record total processing time
     NSTimeInterval totalTime = -[startTime timeIntervalSinceNow];
     LOG_PERF("Total processing time: %.3f ms", totalTime * 1000);
 
@@ -321,12 +332,12 @@ CoreMLDetector::CoreMLDetector(const std::string& modelPath) {
 }
 
 CoreMLDetector::~CoreMLDetector() {
-    // ARC will manage Objective-C object memory, no need to set to nil
+    impl_ = nullptr;
 }
 
-void CoreMLDetector::setCoreMask(int coreMask) {
+int CoreMLDetector::setCoreMask(int coreMask) {
     CoreMLDetectorImpl* obj = (__bridge CoreMLDetectorImpl*)impl_;
-    [obj setCoreMask:coreMask];
+    return [obj setCoreMask:coreMask];
 }
 
 std::vector<DetectionResult> CoreMLDetector::detect(const cv::Mat& image, double nmsThresh, double boxThresh) {
