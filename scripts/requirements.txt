@@ -1,0 +1,4 @@
+coremltools==8.1
+opencv-contrib-python==4.10.0.84
+opencv-python==4.10.0.84
+pillow==11.1.0

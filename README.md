@@ -77,6 +77,16 @@ The `$coremlVersion` should be replaced with the actual version number, which fo
 
 Note: Make sure you have published the artifacts to your local Maven repository using `./gradlew publishToMavenLocal` before using them in other projects.
 
+## Utility Scripts
+
+The `scripts/` directory contains several utility tools for working with Core ML models:
+
+- Model description viewer
+- Real-time object detector
+- Model quantization tool
+
+For detailed information about these tools and their usage, please refer to [scripts/README.md](scripts/README.md).
+
 ## Acknowledgements
 
 This project is adapted from [PhotonVision/rknn_jni](https://github.com/PhotonVision/rknn_jni). We appreciate their work and contribution to the open source community.
