@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(coreml_jni)
+project(coreml_jni CXX OBJC)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -39,7 +39,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(opencv_header)
 
-# 获取 OpenCV 库文件路径
 file(GLOB_RECURSE OPENCV_LIB_PATH
   "${opencv_lib_SOURCE_DIR}/**/*.dylib"
 )
@@ -47,15 +46,26 @@ list(REMOVE_ITEM OPENCV_LIB_PATH "${opencv_lib_SOURCE_DIR}/osx/universal/shared/
 SET(OPENCV_INCLUDE_PATH ${opencv_header_SOURCE_DIR})
 message("OpenCV libraries found: ${OPENCV_LIB_PATH}")
 
+# Manual find Java and set JNI_INCLUDE_DIRS
+# find_package(JNI REQUIRED) just doesn't work on macOS, I don't know why
 find_package(Java REQUIRED)
-find_package(JNI REQUIRED)
-if(JNI_FOUND)
-    # Fixes odd AWT dependency
+if(Java_FOUND)
+    execute_process(
+        COMMAND bash -c "java -XshowSettings:properties -version 2>&1 | grep 'java.home' | cut -d '=' -f2 | tr -d '[:space:]'"
+        OUTPUT_VARIABLE JAVA_HOME_PATH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    
+    message(STATUS "Found Java home: ${JAVA_HOME_PATH}")
+    
+    set(JAVA_INCLUDE_PATH "${JAVA_HOME_PATH}/include")
+    if(APPLE)
+        set(JAVA_INCLUDE_PATH2 "${JAVA_INCLUDE_PATH}/darwin")
+    endif()
     set(JNI_INCLUDE_DIRS ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
     message(STATUS "JNI_INCLUDE_DIRS=${JNI_INCLUDE_DIRS}")
 endif()
 
-# 添加源文件
 file(GLOB_RECURSE SOURCES
     "src/main/native/objc/*.cpp"
     "src/main/native/objc/*.mm"
