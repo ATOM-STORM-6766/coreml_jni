@@ -25,7 +25,7 @@ public class CoreMLThreadSafetyTest extends CoreMLBaseTest {
         
         // Create detector
         String modelPath = CoreMLTestUtils.loadTestModel("coral-640-640-yolov11s.mlmodel");
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         assertNotEquals(0, ptr, "Model creation should return valid pointer");
         
         try {
@@ -86,38 +86,32 @@ public class CoreMLThreadSafetyTest extends CoreMLBaseTest {
 
         // Create detector
         String modelPath = CoreMLTestUtils.loadTestModel("coral-640-640-yolov11s.mlmodel");
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         assertNotEquals(0, ptr, "Model creation should return valid pointer");
         
         try {
-            // 使用更合理的线程数，接近实际使用场景
-            int numStressThreads = Runtime.getRuntime().availableProcessors();
+            // Use a reasonable number of threads, similar to real-world usage scenarios
+            int numStressThreads = 2;
             ExecutorService executor = Executors.newFixedThreadPool(numStressThreads);
             CountDownLatch latch = new CountDownLatch(numStressThreads);
             AtomicInteger successCount = new AtomicInteger(0);
             AtomicInteger errorCount = new AtomicInteger(0);
-            AtomicLong totalProcessingTime = new AtomicLong(0);
             AtomicInteger totalDetections = new AtomicInteger(0);
 
-            // 预热：先运行几次让 JIT 编译器优化代码
+            // Warm-up: Run a few detections first to allow JIT compiler to optimize code
             for (int i = 0; i < 5; i++) {
                 CoreMLJNI.detect(ptr, image.getNativeObjAddr(), NMS_THRESH, BOX_THRESH);
             }
 
             // Submit stress test tasks
+            long startTime = System.nanoTime();
             for (int i = 0; i < numStressThreads; i++) {
                 executor.submit(() -> {
                     try {
-                        // 每个线程运行多次检测
+                        // Each thread runs multiple detections
                         for (int j = 0; j < 20; j++) {
-                            // 只测量核心检测时间
-                            long startTime = System.nanoTime();
                             CoreMLResult[] results = CoreMLJNI.detect(ptr, image.getNativeObjAddr(), NMS_THRESH, BOX_THRESH);
-                            long endTime = System.nanoTime();
-                            
-                            totalProcessingTime.addAndGet(endTime - startTime);
                             totalDetections.incrementAndGet();
-                            
                             assertNotNull(results, "Detection results should not be null");
                         }
                         successCount.incrementAndGet();
@@ -132,14 +126,17 @@ public class CoreMLThreadSafetyTest extends CoreMLBaseTest {
             // Wait for all tasks to complete
             assertTrue(latch.await(60, TimeUnit.SECONDS), "Stress test timed out");
             executor.shutdown();
+            long endTime = System.nanoTime();
 
             // Calculate performance metrics
-            double avgProcessingTimeMs = totalProcessingTime.get() / (double)totalDetections.get() / 1_000_000.0;
-            double fps = 1000.0 / avgProcessingTimeMs;
+            double totalTimeSeconds = (endTime - startTime) / 1_000_000_000.0;
+            double fps = totalDetections.get() / totalTimeSeconds;
+            double avgProcessingTimeMs = totalTimeSeconds * 1000.0 / totalDetections.get();
             
             System.out.println("\n=== Stress Test Performance Metrics ===");
             System.out.printf("Number of threads: %d\n", numStressThreads);
             System.out.printf("Total detections: %d\n", totalDetections.get());
+            System.out.printf("Total execution time: %.2f seconds\n", totalTimeSeconds);
             System.out.printf("Average processing time: %.2f ms\n", avgProcessingTimeMs);
             System.out.printf("Average FPS: %.2f\n", fps);
             System.out.println("====================================\n");

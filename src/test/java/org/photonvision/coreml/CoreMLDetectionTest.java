@@ -16,7 +16,7 @@ public class CoreMLDetectionTest {
     @Test
     public void testCoralDetection() {
         String modelPath = CoreMLTestUtils.loadTestModel("coral-640-640-yolov11s.mlmodel");
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         assertNotEquals(0, ptr, "Model creation should return valid pointer");
 
         // Test coral detection
@@ -52,7 +52,7 @@ public class CoreMLDetectionTest {
     @Test
     public void testAlgaeDetection() {
         String modelPath = CoreMLTestUtils.loadTestModel("algae-640-640-yolov11s.mlmodel");
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         assertNotEquals(0, ptr, "Model creation should return valid pointer");
 
         // Test algae detection
@@ -88,7 +88,7 @@ public class CoreMLDetectionTest {
     @Test
     public void testDetectionPerformance() {
         String modelPath = CoreMLTestUtils.loadTestModel("coral-640-640-yolov11s.mlmodel");
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         Mat image = CoreMLTestUtils.loadTestImage("coral.jpeg");
         
         // Warm up
@@ -115,7 +115,7 @@ public class CoreMLDetectionTest {
     @Test
     public void testDifferentConfidenceThresholds() {
         String modelPath = CoreMLTestUtils.loadTestModel("coral-640-640-yolov11s.mlmodel");
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         Mat image = CoreMLTestUtils.loadTestImage("coral.jpeg");
         
         double[] confidenceThresholds = {0.1, 0.3, 0.5, 0.7, 0.9};

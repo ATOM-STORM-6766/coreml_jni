@@ -52,6 +52,9 @@ typedef struct {
 @interface CoreMLDetectorImpl : NSObject {
     MLModel* _model;
     MLModelConfiguration* _config;
+    CVPixelBufferPoolRef _pixelBufferPool;
+    NSInteger _poolWidth;
+    NSInteger _poolHeight;
 }
 
 - (instancetype)initWithModelPath:(NSString *)modelPath;
@@ -64,48 +67,9 @@ typedef struct {
                               numClasses:(NSInteger)numClasses
                               params:(PreprocessParams)params;
 - (cv::Mat)preprocessImage:(cv::Mat)image params:(PreprocessParams*)params;
+- (CVPixelBufferRef)getImageBufferFromMat:(cv::Mat)matimg;
 
 @end
-
-
-CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
-    cv::cvtColor(matimg, matimg, cv::COLOR_BGR2BGRA);
-    
-    int widthReminder = matimg.cols % 64, heightReminder = matimg.rows % 64;
-    if (widthReminder != 0 || heightReminder != 0) {
-        cv::resize(matimg, matimg, cv::Size(matimg.cols + (64 - widthReminder), matimg.rows + (64 - heightReminder)));
-    }
-
-    NSDictionary *options = [NSDictionary dictionaryWithObjectsAndKeys:
-                                [NSNumber numberWithBool: YES], kCVPixelBufferMetalCompatibilityKey,
-                                [NSNumber numberWithBool: YES], kCVPixelBufferCGImageCompatibilityKey,
-                                [NSNumber numberWithBool: YES], kCVPixelBufferCGBitmapContextCompatibilityKey,
-                                [NSNumber numberWithInt: matimg.cols], kCVPixelBufferWidthKey,
-                                [NSNumber numberWithInt: matimg.rows], kCVPixelBufferHeightKey,
-                                [NSNumber numberWithInt: matimg.step[0]], kCVPixelBufferBytesPerRowAlignmentKey,
-                                nil];
-    CVPixelBufferRef imageBuffer = nullptr;
-    CVReturn status = CVPixelBufferCreate(kCFAllocatorMalloc, matimg.cols, matimg.rows, kCVPixelFormatType_32BGRA, (CFDictionaryRef) CFBridgingRetain(options), &imageBuffer) ;
-    if (status != kCVReturnSuccess || imageBuffer == nullptr) {
-        LOG_ERROR("Failed to create CVPixelBuffer in getImageBufferFromMat");
-        if (imageBuffer) {
-            CVPixelBufferRelease(imageBuffer);
-        }
-        return nullptr;
-    }
-    CVPixelBufferLockBaseAddress(imageBuffer, 0);
-    void *base = CVPixelBufferGetBaseAddress(imageBuffer);
-    if (!base) {
-        LOG_ERROR("Failed to get base address for CVPixelBuffer");
-        CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
-        CVPixelBufferRelease(imageBuffer);
-        return nullptr;
-    }
-    memcpy(base, matimg.data, matimg.total() * matimg.elemSize());
-    CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
-
-    return imageBuffer;
-} 
 
 @implementation CoreMLDetectorImpl
 
@@ -128,17 +92,42 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
         // Get model description and input image size
         MLModelDescription *modelDescription = _model.modelDescription;
         NSDictionary<NSString *, MLFeatureDescription *> *inputDescriptions = modelDescription.inputDescriptionsByName;
-        // Assuming the image input name is "image". Adjust if necessary.
         MLFeatureDescription *imageInputDescription = inputDescriptions[@"image"]; 
         
         if (imageInputDescription && imageInputDescription.type == MLFeatureTypeImage) {
             MLImageConstraint *imageConstraint = imageInputDescription.imageConstraint;
-            NSInteger inputWidth = imageConstraint.pixelsWide;
-            NSInteger inputHeight = imageConstraint.pixelsHigh;
+            _poolWidth = imageConstraint.pixelsWide;
+            _poolHeight = imageConstraint.pixelsHigh;
 
-            if (inputWidth <= 0 || inputHeight <= 0) {
-                 LOG_ERROR("Invalid input dimensions retrieved from model: %ld x %ld", inputWidth, inputHeight);
+            if (_poolWidth <= 0 || _poolHeight <= 0) {
+                 LOG_ERROR("Invalid input dimensions retrieved from model: %ld x %ld", _poolWidth, _poolHeight);
                  return nil;
+            }
+
+            // Create pixel buffer pool
+            NSDictionary *poolAttributes = @{
+                (NSString *)kCVPixelBufferPoolMinimumBufferCountKey: @10,
+                (NSString *)kCVPixelBufferPoolMaximumBufferAgeKey: @(10.0)
+            };
+
+            NSDictionary *pixelBufferAttributes = @{
+                (NSString *)kCVPixelBufferMetalCompatibilityKey: @YES,
+                (NSString *)kCVPixelBufferCGImageCompatibilityKey: @YES,
+                (NSString *)kCVPixelBufferCGBitmapContextCompatibilityKey: @YES,
+                (NSString *)kCVPixelBufferWidthKey: @(_poolWidth),
+                (NSString *)kCVPixelBufferHeightKey: @(_poolHeight),
+                (NSString *)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA),
+                (NSString *)kCVPixelBufferIOSurfacePropertiesKey: @{}
+            };
+
+            CVReturn status = CVPixelBufferPoolCreate(kCFAllocatorDefault,
+                                                    (__bridge CFDictionaryRef)poolAttributes,
+                                                    (__bridge CFDictionaryRef)pixelBufferAttributes,
+                                                    &_pixelBufferPool);
+
+            if (status != kCVReturnSuccess || !_pixelBufferPool) {
+                LOG_ERROR("Failed to create pixel buffer pool: %d", status);
+                return nil;
             }
         } else {
             LOG_ERROR("Could not find image input description named 'image' or it's not an image type.");
@@ -152,6 +141,54 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     }
 
     return self;
+}
+
+- (void)dealloc {
+    if (_pixelBufferPool) {
+        CVPixelBufferPoolRelease(_pixelBufferPool);
+        _pixelBufferPool = nullptr;
+    }
+    [super dealloc];
+}
+
+- (CVPixelBufferRef)getImageBufferFromMat:(cv::Mat)matimg {
+    cv::cvtColor(matimg, matimg, cv::COLOR_BGR2BGRA);
+    
+    int widthReminder = matimg.cols % 64, heightReminder = matimg.rows % 64;
+    if (widthReminder != 0 || heightReminder != 0) {
+        cv::resize(matimg, matimg, cv::Size(matimg.cols + (64 - widthReminder), matimg.rows + (64 - heightReminder)));
+    }
+
+    // Try to get a buffer from the pool
+    CVPixelBufferRef imageBuffer = nullptr;
+    CVReturn status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, _pixelBufferPool, &imageBuffer);
+    
+    if (status != kCVReturnSuccess || !imageBuffer) {
+        LOG_ERROR("Failed to get pixel buffer from pool: %d", status);
+        return nullptr;
+    }
+
+    // Lock the buffer for writing
+    status = CVPixelBufferLockBaseAddress(imageBuffer, 0);
+    if (status != kCVReturnSuccess) {
+        LOG_ERROR("Failed to lock pixel buffer: %d", status);
+        CVPixelBufferRelease(imageBuffer);
+        return nullptr;
+    }
+
+    void *base = CVPixelBufferGetBaseAddress(imageBuffer);
+    if (!base) {
+        LOG_ERROR("Failed to get base address for pixel buffer");
+        CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
+        CVPixelBufferRelease(imageBuffer);
+        return nullptr;
+    }
+
+    // Copy the image data
+    memcpy(base, matimg.data, matimg.total() * matimg.elemSize());
+    CVPixelBufferUnlockBaseAddress(imageBuffer, 0);
+
+    return imageBuffer;
 }
 
 // Set the compute units for the model, return YES if successful, NO otherwise
@@ -326,7 +363,7 @@ CVPixelBufferRef getImageBufferFromMat(cv::Mat matimg) {
     LOG_PERF("Preprocess time: %.3f ms", preprocessTime * 1000);
     
     // Convert OpenCV Mat to CVPixelBuffer
-    CVPixelBufferRef pixelBuffer = getImageBufferFromMat(resizedImage);
+    CVPixelBufferRef pixelBuffer = [self getImageBufferFromMat:resizedImage];
     if (!pixelBuffer) {
         LOG_ERROR("Failed to create CVPixelBuffer");
         return [NSArray array];

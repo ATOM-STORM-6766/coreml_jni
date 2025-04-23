@@ -126,7 +126,7 @@ public class CoreMLJNI {
      * @param coreMask Which compute unit to use.
      * @return Pointer to the detector in native memory
      */
-    public static native long create(String modelPath, int numClasses, int modelVer, CoreMask coreMask);
+    public static native long create(String modelPath, int numClasses, int modelVer, int coreMask);
 
     /**
      * Given an already running detector, change the bitmask controlling which

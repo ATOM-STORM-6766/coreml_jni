@@ -16,20 +16,20 @@ public class CoreMLBaseTest {
     public void testModelCreation() {
         // Test model creation with valid path
         String modelPath = CoreMLTestUtils.loadTestModel("coral-640-640-yolov11s.mlmodel");
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         assertNotEquals(0, ptr, "Model creation should return valid pointer");
         CoreMLJNI.destroy(ptr);
 
         // Test model creation with invalid path
         String invalidPath = "invalid/path/model.mlmodel";
-        ptr = CoreMLJNI.create(invalidPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        ptr = CoreMLJNI.create(invalidPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         assertEquals(0, ptr, "Model creation with invalid path should return 0(NULL)");
     }
 
     @Test
     public void testCoreMaskSetting() {
         String modelPath = CoreMLTestUtils.loadTestModel("coral-640-640-yolov11s.mlmodel");
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         
         // Test valid core mask settings
         int ret = CoreMLJNI.setCoreMask(ptr, CoreMLJNI.CoreMask.ALL);
@@ -54,7 +54,7 @@ public class CoreMLBaseTest {
     @Test
     public void testEmptyImageDetection() {
         String modelPath = CoreMLTestUtils.loadTestModel("coral-640-640-yolov11s.mlmodel");
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         
         // Test with empty image
         Mat emptyImage = CoreMLTestUtils.loadTestImage("empty.png");
@@ -71,7 +71,7 @@ public class CoreMLBaseTest {
     @Test
     public void testInvalidDetectionParameters() {
         String modelPath = CoreMLTestUtils.loadTestModel("coral-640-640-yolov11s.mlmodel");
-        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL);
+        long ptr = CoreMLJNI.create(modelPath, 1, CoreMLJNI.ModelVersion.YOLO_V11.ordinal(), CoreMLJNI.CoreMask.ALL.ordinal());
         
         Mat image = CoreMLTestUtils.loadTestImage("coral.jpeg");
         
