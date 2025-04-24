@@ -41,12 +41,12 @@ Features:
 - Automatic image pre-processing and post-processing
 - Support for macOS (with Neural Engine) and other platforms (CPU only)
 
-### 3. Model Quantization Tool (coreml_model_convert.py)
+### 3. Model Quantization Tool (coreml_model_quantization.py)
 
 A tool for quantizing Core ML models to reduce model size.
 
 ```bash
-python coreml_model_convert.py -i input_model.mlmodel -o output_model.mlmodel -b [8|16]
+python coreml_model_quantization.py -i input_model.mlmodel -o output_model.mlmodel -b [8|16]
 ```
 
 Parameters:
