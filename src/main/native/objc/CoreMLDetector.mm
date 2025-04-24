@@ -41,13 +41,13 @@
 #endif
 
 // Add PreprocessParams struct before the CoreMLDetectorImpl interface
-typedef struct {
+using PreprocessParams = struct {
     NSInteger inputWidth;
     NSInteger inputHeight;
     float scaleFactor;
     float padWidth;
     float padHeight;
-} PreprocessParams;
+};
 
 @interface CoreMLDetectorImpl : NSObject {
     MLModel* _model;
