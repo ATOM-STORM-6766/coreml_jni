@@ -55,6 +55,20 @@ Parameters:
 - `-o` or `--output`: Output model path (optional, defaults to input filename with bit-depth suffix)
 - `-b` or `--bits`: Quantization precision, either 8 or 16 bits (default: 16)
 
+### 4. YOLO PyTorch to CoreML Export Tool (export_coreml.py)
+
+A tool to export YOLO PyTorch models (.pt) to CoreML format (.mlpackage) using Ultralytics.
+
+```bash
+python export_coreml.py --input-file path/to/your/model.pt --output-file path/to/save/model.mlpackage [--nms]
+```
+
+Parameters:
+
+- `--input-file`: Path to the input PyTorch model file (required, .pt format)
+- `--output-file`: Path to save the exported CoreML model (required, must end with .mlpackage)
+- `--nms`: Optional, add Non-Max Suppression (NMS) post-processi
+
 ## Important Notes
 
 1. All tools require Core ML Tools and related dependencies to be installed.

@@ -52,9 +52,8 @@ using PreprocessParams = struct {
 @interface CoreMLDetectorImpl : NSObject {
     MLModel* _model;
     MLModelConfiguration* _config;
-    CVPixelBufferPoolRef _pixelBufferPool;
-    NSInteger _poolWidth;
-    NSInteger _poolHeight;
+    NSInteger _inputWidth;
+    NSInteger _inputHeight;
 }
 
 - (instancetype)initWithModelPath:(NSString *)modelPath;
@@ -96,38 +95,12 @@ using PreprocessParams = struct {
         
         if (imageInputDescription && imageInputDescription.type == MLFeatureTypeImage) {
             MLImageConstraint *imageConstraint = imageInputDescription.imageConstraint;
-            _poolWidth = imageConstraint.pixelsWide;
-            _poolHeight = imageConstraint.pixelsHigh;
+            _inputWidth = imageConstraint.pixelsWide;
+            _inputHeight = imageConstraint.pixelsHigh;
 
-            if (_poolWidth <= 0 || _poolHeight <= 0) {
-                 LOG_ERROR("Invalid input dimensions retrieved from model: %ld x %ld", _poolWidth, _poolHeight);
+            if (_inputWidth <= 0 || _inputHeight <= 0) {
+                 LOG_ERROR("Invalid input dimensions retrieved from model: %ld x %ld", _inputWidth, _inputHeight);
                  return nil;
-            }
-
-            // Create pixel buffer pool
-            NSDictionary *poolAttributes = @{
-                (NSString *)kCVPixelBufferPoolMinimumBufferCountKey: @10,
-                (NSString *)kCVPixelBufferPoolMaximumBufferAgeKey: @(10.0)
-            };
-
-            NSDictionary *pixelBufferAttributes = @{
-                (NSString *)kCVPixelBufferMetalCompatibilityKey: @YES,
-                (NSString *)kCVPixelBufferCGImageCompatibilityKey: @YES,
-                (NSString *)kCVPixelBufferCGBitmapContextCompatibilityKey: @YES,
-                (NSString *)kCVPixelBufferWidthKey: @(_poolWidth),
-                (NSString *)kCVPixelBufferHeightKey: @(_poolHeight),
-                (NSString *)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA),
-                (NSString *)kCVPixelBufferIOSurfacePropertiesKey: @{}
-            };
-
-            CVReturn status = CVPixelBufferPoolCreate(kCFAllocatorDefault,
-                                                    (__bridge CFDictionaryRef)poolAttributes,
-                                                    (__bridge CFDictionaryRef)pixelBufferAttributes,
-                                                    &_pixelBufferPool);
-
-            if (status != kCVReturnSuccess || !_pixelBufferPool) {
-                LOG_ERROR("Failed to create pixel buffer pool: %d", status);
-                return nil;
             }
         } else {
             LOG_ERROR("Could not find image input description named 'image' or it's not an image type.");
@@ -144,27 +117,41 @@ using PreprocessParams = struct {
 }
 
 - (void)dealloc {
-    if (_pixelBufferPool) {
-        CVPixelBufferPoolRelease(_pixelBufferPool);
-        _pixelBufferPool = nullptr;
-    }
     [super dealloc];
 }
 
 - (CVPixelBufferRef)getImageBufferFromMat:(cv::Mat)matimg {
     cv::cvtColor(matimg, matimg, cv::COLOR_BGR2BGRA);
     
-    int widthReminder = matimg.cols % 64, heightReminder = matimg.rows % 64;
-    if (widthReminder != 0 || heightReminder != 0) {
-        cv::resize(matimg, matimg, cv::Size(matimg.cols + (64 - widthReminder), matimg.rows + (64 - heightReminder)));
+    // Ensure dimensions are valid
+    if (matimg.cols <= 0 || matimg.rows <= 0) {
+        LOG_ERROR("Invalid image dimensions: %d x %d", matimg.cols, matimg.rows);
+        return nullptr;
     }
 
-    // Try to get a buffer from the pool
+    // Create a new CVPixelBuffer directly instead of using a pool
     CVPixelBufferRef imageBuffer = nullptr;
-    CVReturn status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, _pixelBufferPool, &imageBuffer);
+    NSDictionary *pixelBufferAttributes = @{
+        (NSString *)kCVPixelBufferMetalCompatibilityKey: @YES,
+        (NSString *)kCVPixelBufferCGImageCompatibilityKey: @YES,
+        (NSString *)kCVPixelBufferCGBitmapContextCompatibilityKey: @YES,
+        (NSString *)kCVPixelBufferWidthKey: @(matimg.cols),
+        (NSString *)kCVPixelBufferHeightKey: @(matimg.rows),
+        (NSString *)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA),
+        (NSString *)kCVPixelBufferIOSurfacePropertiesKey: @{}
+    };
+    
+    CVReturn status = CVPixelBufferCreate(
+        kCFAllocatorDefault,
+        matimg.cols,
+        matimg.rows,
+        kCVPixelFormatType_32BGRA,
+        (__bridge CFDictionaryRef)pixelBufferAttributes,
+        &imageBuffer
+    );
     
     if (status != kCVReturnSuccess || !imageBuffer) {
-        LOG_ERROR("Failed to get pixel buffer from pool: %d", status);
+        LOG_ERROR("Failed to create pixel buffer: %d", status);
         return nullptr;
     }
 

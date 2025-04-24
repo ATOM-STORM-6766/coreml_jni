@@ -79,11 +79,7 @@ Note: Make sure you have published the artifacts to your local Maven repository 
 
 ## Utility Scripts
 
-The `scripts/` directory contains several utility tools for working with Core ML models:
-
-- Model description viewer
-- Real-time object detector
-- Model quantization tool
+The `scripts/` directory contains several utility tools for working with Core ML models.
 
 For detailed information about these tools and their usage, please refer to [scripts/README.md](scripts/README.md).
 
