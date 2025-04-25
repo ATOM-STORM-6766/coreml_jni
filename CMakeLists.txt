@@ -12,6 +12,7 @@ if(APPLE)
     set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
     set(CMAKE_OBJCXX_FLAGS "${CMAKE_OBJCXX_FLAGS} -fobjc-arc -fobjc-weak")
     set(CMAKE_OBJCXX_FLAGS "${CMAKE_OBJCXX_FLAGS} -framework CoreML -framework Vision -framework Foundation -framework AppKit")
+    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
 endif()
 
 set(BUILD_SHARED_LIBS ON)
