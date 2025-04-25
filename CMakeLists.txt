@@ -10,8 +10,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(APPLE)
     set(CMAKE_OBJCXX_STANDARD 17)
     set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
-    set(CMAKE_OBJCXX_FLAGS "${CMAKE_OBJCXX_FLAGS} -fobjc-arc -fobjc-weak")
-    set(CMAKE_OBJCXX_FLAGS "${CMAKE_OBJCXX_FLAGS} -framework CoreML -framework Vision -framework Foundation -framework AppKit")
     set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
 endif()
 
@@ -20,7 +18,6 @@ set(BUILD_SHARED_LIBS ON)
 set(OPENCV_YEAR "frc2025")
 set(OPENCV_VERSION "4.10.0-3")
 set(OPENCV_ARCH "osxuniversal")
-# also valid: windowsx86-64
 
 # type can be "", "debug", "static", or "staticdebug"
 set(OPENCV_TYPE "")
@@ -104,6 +101,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 # Pass the log level definition to the compiler
 target_compile_definitions(${PROJECT_NAME} PRIVATE CURRENT_LOG_LEVEL=${COMPILE_LOG_LEVEL})
+
+# Add Objective-C ARC compile options directly to the target
+if(APPLE)
+    target_compile_options(${PROJECT_NAME} PRIVATE "-fobjc-arc")
+endif()
 
 set_target_properties(${PROJECT_NAME}
     PROPERTIES
