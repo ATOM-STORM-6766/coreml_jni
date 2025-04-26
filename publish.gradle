@@ -22,14 +22,14 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             groupId = artifactGroupId
-            artifactId = "${baseArtifactId}-java"
+            artifactId = baseArtifactId
             version = pubVersion + (publishType ? "-" + publishType : "");
 
             from components.java
         }
         mavenJNI(MavenPublication) {
             groupId = artifactGroupId
-            artifactId = "${baseArtifactId}-jni"
+            artifactId = baseArtifactId
             version = pubVersion + (publishType ? "-" + publishType : "");
 
             artifact nativeLibraryJar
