@@ -9,6 +9,7 @@ def artifactGroupId = 'org.atomstorm'
 def baseArtifactId = "coreml_jni"
 
 def jniType = project.findProperty("PublishType") ?: "";
+def finalVersion = pubVersion + (jniType.isEmpty() ? "" : "-${jniType}")
 println("Building with JNI publish type: " + jniType);
 
 task nativeLibraryJar(type: Jar, dependsOn: copyNativeLibrary) {
@@ -32,14 +33,14 @@ publishing {
         mavenJava(MavenPublication) {
             groupId = artifactGroupId
             artifactId = "${baseArtifactId}-java"
-            version = pubVersion;
+            version = finalVersion;
 
             from components.java
         }
         mavenJNI(MavenPublication) {
             groupId = artifactGroupId
             artifactId = "${baseArtifactId}-jni"
-            version = pubVersion;
+            version = finalVersion;
 
             artifact nativeLibraryJar
         }
