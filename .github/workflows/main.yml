@@ -31,6 +31,10 @@ jobs:
             jar-name: 'DebugWithAsan'
             log-level: 4 # DEBUG
 
+    permissions:
+      contents: write
+      packages: write
+
     steps:
       - uses: actions/checkout@v3
         with:
@@ -57,11 +61,17 @@ jobs:
 
       - run: find .
 
-      - run: |
+      - name: Build with Gradle
+        run: |
           chmod +x gradlew
-          ./gradlew build ${{ (startsWith(github.event_name, 'push') && 'publish') || '' }} -PArchOverride=osxuniversal -PPublishType=${{ matrix.publish-type }} -x check
+          ./gradlew build -PPublishType=${{ matrix.publish-type }} -x check
+
+      - name: Publish to GitHub Packages
+        if: github.event_name == 'push'
+        run: |
+          ./gradlew publish -PPublishType=${{ matrix.publish-type }} -x check
         env:
-          ARTIFACTORY_API_KEY: ${{ secrets.ARTIFACTORY_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/upload-artifact@v4
         name: Upload jar

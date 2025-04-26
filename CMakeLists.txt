@@ -44,24 +44,43 @@ list(REMOVE_ITEM OPENCV_LIB_PATH "${opencv_lib_SOURCE_DIR}/osx/universal/shared/
 SET(OPENCV_INCLUDE_PATH ${opencv_header_SOURCE_DIR})
 message("OpenCV libraries found: ${OPENCV_LIB_PATH}")
 
-# Manual find Java and set JNI_INCLUDE_DIRS
-# find_package(JNI REQUIRED) just doesn't work on macOS, I don't know why
-find_package(Java REQUIRED)
-if(Java_FOUND)
-    execute_process(
-        COMMAND bash -c "java -XshowSettings:properties -version 2>&1 | grep 'java.home' | cut -d '=' -f2 | tr -d '[:space:]'"
-        OUTPUT_VARIABLE JAVA_HOME_PATH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    
-    message(STATUS "Found Java home: ${JAVA_HOME_PATH}")
-    
-    set(JAVA_INCLUDE_PATH "${JAVA_HOME_PATH}/include")
-    if(APPLE)
-        set(JAVA_INCLUDE_PATH2 "${JAVA_INCLUDE_PATH}/darwin")
+
+set(FOUND_JNI FALSE)
+find_package(JNI)
+if(JNI_FOUND)
+    message(STATUS "JNI found by CMake: ${JNI_INCLUDE_DIRS}")
+    set(FOUND_JNI TRUE)
+else()
+    message(STATUS "CMake didn't find JNI, trying to find it manually")
+    find_package(Java REQUIRED)
+    if(Java_FOUND)
+        execute_process(
+            COMMAND bash -c "java -XshowSettings:properties -version 2>&1 | grep 'java.home' | cut -d '=' -f2 | tr -d '[:space:]'"
+            OUTPUT_VARIABLE JAVA_HOME_PATH
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE JAVA_CMD_RESULT
+        )
+        if(JAVA_CMD_RESULT EQUAL 0 AND NOT JAVA_HOME_PATH STREQUAL "")
+            message(STATUS "Found Java home: ${JAVA_HOME_PATH}")
+            set(JAVA_INCLUDE_PATH "${JAVA_HOME_PATH}/include")
+            if(APPLE)
+                set(JAVA_INCLUDE_PATH2 "${JAVA_INCLUDE_PATH}/darwin")
+            endif()
+            if(EXISTS "${JAVA_INCLUDE_PATH}" AND (NOT APPLE OR EXISTS "${JAVA_INCLUDE_PATH2}"))
+                set(JNI_INCLUDE_DIRS ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
+                set(FOUND_JNI TRUE)
+                message(STATUS "JNI includes found manually: ${JNI_INCLUDE_DIRS}")
+            else()
+                message(WARNING "Java include directories not found at expected locations")
+            endif()
+        else()
+            message(WARNING "Failed to get Java home path using command line method")
+        endif()
     endif()
-    set(JNI_INCLUDE_DIRS ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
-    message(STATUS "JNI_INCLUDE_DIRS=${JNI_INCLUDE_DIRS}")
+endif()
+
+if(NOT FOUND_JNI)
+    message(FATAL_ERROR "Could not find JNI includes using either CMake or manual methods")
 endif()
 
 file(GLOB_RECURSE SOURCES

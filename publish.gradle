@@ -20,10 +20,11 @@ build.dependsOn nativeLibraryJar
 publishing {
     repositories {
         maven {
-            url ('https://maven.photonvision.org/' + (isDev ? 'snapshots' : 'releases'))
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/${System.getenv("GITHUB_REPOSITORY") ?: "ATOM-STORM-6766/coreml_jni"}")
             credentials {
-                username 'ghactions'
-                password System.getenv("ARTIFACTORY_API_KEY")
+                username = System.getenv("GITHUB_ACTOR") ?: System.getenv("GITHUB_USERNAME") ?: "username"
+                password = System.getenv("GITHUB_TOKEN") ?: System.getenv("GITHUB_PASSWORD") ?: "password"
             }
         }
     }
