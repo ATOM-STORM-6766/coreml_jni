@@ -8,7 +8,7 @@ if (nativeName.equals("macx64") || nativeName.equals("macarm64")) {
 def publishType = project.findProperty("PublishType") ?: "";
 
 def artifactGroupId = 'org.atomstorm'
-def baseArtifactId = "coreml_jni" + publishType
+def baseArtifactId = "coreml_jni"
 
 println("Building with JNI publish type: " + publishType);
 
@@ -34,14 +34,14 @@ publishing {
         mavenJava(MavenPublication) {
             groupId = artifactGroupId
             artifactId = "${baseArtifactId}-java"
-            version = pubVersion;// + "-" + nativeName;
+            version = pubVersion + (publishType ? "-" + publishType : "");
 
             from components.java
         }
         mavenJNI(MavenPublication) {
             groupId = artifactGroupId
             artifactId = "${baseArtifactId}-jni"
-            version = pubVersion;
+            version = pubVersion + (publishType ? "-" + publishType : "");
 
             artifact nativeLibraryJar
         }
