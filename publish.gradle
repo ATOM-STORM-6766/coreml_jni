@@ -5,14 +5,15 @@ if (nativeName.equals("macx64") || nativeName.equals("macarm64")) {
     nativeName = "osxuniversal";
 }
 
-def artifactGroupId = 'org.photonvision'
-def baseArtifactId = "coreml_jni"
+def publishType = project.findProperty("PublishType") ?: "";
 
-def jniType = project.findProperty("PublishType") ?: "";
-println("Building with JNI publish type: " + jniType);
+def artifactGroupId = 'org.atomstorm'
+def baseArtifactId = "coreml_jni" + publishType
+
+println("Building with JNI publish type: " + publishType);
 
 task nativeLibraryJar(type: Jar, dependsOn: copyNativeLibrary) {
-    archiveClassifier = nativeName + jniType
+    archiveClassifier = nativeName + publishType
     from outputsFolder
 }
 build.dependsOn nativeLibraryJar
