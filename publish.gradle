@@ -19,17 +19,6 @@ task nativeLibraryJar(type: Jar, dependsOn: copyNativeLibrary) {
 build.dependsOn nativeLibraryJar
 
 publishing {
-    repositories {
-        maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/${System.getenv("GITHUB_REPOSITORY") ?: "ATOM-STORM-6766/coreml_jni"}")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: System.getenv("GITHUB_USERNAME") ?: "username"
-                password = System.getenv("GITHUB_TOKEN") ?: System.getenv("GITHUB_PASSWORD") ?: "password"
-            }
-        }
-    }
-
     publications {
         mavenJava(MavenPublication) {
             groupId = artifactGroupId
@@ -45,12 +34,6 @@ publishing {
 
             artifact nativeLibraryJar
         }
-    }
-}
-
-tasks.withType(PublishToMavenRepository) {
-    doFirst {
-        println("Publishing coreml-jni to " + repository.url)
     }
 }
 
