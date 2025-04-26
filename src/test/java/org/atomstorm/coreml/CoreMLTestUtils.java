@@ -1,4 +1,4 @@
-package org.photonvision.coreml;
+package org.atomstorm.coreml;
 
 import edu.wpi.first.util.CombinedRuntimeLoader;
 import org.opencv.core.Core;

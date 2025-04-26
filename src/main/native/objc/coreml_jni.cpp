@@ -17,7 +17,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
         return JNI_ERR;
     }
 
-    detectionResultClass = JClass(env, "org/photonvision/coreml/CoreMLJNI$CoreMLResult");
+    detectionResultClass = JClass(env, "org/atomstorm/coreml/CoreMLJNI$CoreMLResult");
     if (!detectionResultClass) {
         std::printf("Couldn't find class!");
         return JNI_ERR;
@@ -38,7 +38,7 @@ static jobject MakeJObject(JNIEnv *env, const DetectionResult &result) {
     );
 }
 
-JNIEXPORT jlong JNICALL Java_org_photonvision_coreml_CoreMLJNI_create
+JNIEXPORT jlong JNICALL Java_org_atomstorm_coreml_CoreMLJNI_create
   (JNIEnv *env, jclass, jstring modelPath, jint numClasses, jint modelVer, jint coreNum)
 {
     if (modelPath == nullptr) {
@@ -82,7 +82,7 @@ JNIEXPORT jlong JNICALL Java_org_photonvision_coreml_CoreMLJNI_create
     }
 }
 
-JNIEXPORT jint JNICALL Java_org_photonvision_coreml_CoreMLJNI_setCoreMask
+JNIEXPORT jint JNICALL Java_org_atomstorm_coreml_CoreMLJNI_setCoreMask
   (JNIEnv *env, jclass, jlong ptr, jint desiredCore)
 {
     if (ptr == 0) {
@@ -97,7 +97,7 @@ JNIEXPORT jint JNICALL Java_org_photonvision_coreml_CoreMLJNI_setCoreMask
     return context->detector->setCoreMask(desiredCore);
 }
 
-JNIEXPORT void JNICALL Java_org_photonvision_coreml_CoreMLJNI_destroy
+JNIEXPORT void JNICALL Java_org_atomstorm_coreml_CoreMLJNI_destroy
   (JNIEnv *env, jclass, jlong ptr)
 {
     if (ptr == 0) {
@@ -115,7 +115,7 @@ JNIEXPORT void JNICALL Java_org_photonvision_coreml_CoreMLJNI_destroy
     delete context;
 }
 
-JNIEXPORT jobjectArray JNICALL Java_org_photonvision_coreml_CoreMLJNI_detect
+JNIEXPORT jobjectArray JNICALL Java_org_atomstorm_coreml_CoreMLJNI_detect
   (JNIEnv *env, jclass, jlong detectorPtr, jlong imagePtr, jdouble nmsThresh, jdouble boxThresh)
 {   
     jobjectArray emptyArray = env->NewObjectArray(0, detectionResultClass, nullptr);

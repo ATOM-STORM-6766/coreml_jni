@@ -1,5 +1,5 @@
 /*
- * Copyright (C) Photon Vision.
+ * Copyright (C) AtomStorm.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package org.photonvision.coreml;
+package org.atomstorm.coreml;
 
 import org.opencv.core.Point;
 import org.opencv.core.Rect2d;

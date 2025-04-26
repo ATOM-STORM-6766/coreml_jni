@@ -65,10 +65,10 @@ The built dynamic libraries will be installed to:
 To use the built artifacts in your Gradle project, add the following dependencies to your `build.gradle` file:
 
 ```gradle
-implementation("org.photonvision:coreml_jni-jni:$coremlVersion:osxuniversal") {
+implementation("org.atomstorm:coreml_jni-jni:$coremlVersion:osxuniversal") {
     transitive = false
 }
-implementation("org.photonvision:coreml_jni-java:$coremlVersion") {
+implementation("org.atomstorm:coreml_jni-java:$coremlVersion") {
     transitive = false
 }
 ```

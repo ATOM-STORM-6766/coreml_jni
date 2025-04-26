@@ -1,4 +1,4 @@
-package org.photonvision.coreml;
+package org.atomstorm.coreml;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

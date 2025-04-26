@@ -1,4 +1,4 @@
-package org.photonvision.coreml;
+package org.atomstorm.coreml;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -8,7 +8,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.opencv.core.*;
-import org.photonvision.coreml.CoreMLJNI.CoreMLResult;
+import org.atomstorm.coreml.CoreMLJNI.CoreMLResult;
 
 public class CoreMLThreadSafetyTest extends CoreMLBaseTest {
     private static final int NUM_THREADS = 4;
