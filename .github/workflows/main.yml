@@ -61,15 +61,18 @@ jobs:
 
       - run: find .
 
-      - name: Build with Gradle
-        run: |
-          chmod +x gradlew
-          ./gradlew build -PPublishType=${{ matrix.publish-type }} -x check
-
       - name: Run tests
         run: |
           chmod +x gradlew
           ./gradlew test
+
+      - name: Build with Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew build ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'publish') || '' }} -PPublishType=${{ matrix.publish-type }} -x check
+        env:
+          ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+          ARTIFACTORY_API_KEY: ${{ secrets.ARTIFACTORY_API_KEY }}
 
       - uses: actions/upload-artifact@v4
         name: Upload jar
@@ -81,7 +84,7 @@ jobs:
           name: libcoreml-${{ matrix.jar-name }}
           path: cmake_build/*.dylib
 
-      # Push to dev release on pushes to master
+      # Push to dev release on pushes to main
       - uses: softprops/action-gh-release@v1
         with:
           tag_name: Dev

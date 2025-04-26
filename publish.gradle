@@ -5,35 +5,50 @@ if (nativeName.equals("macx64") || nativeName.equals("macarm64")) {
     nativeName = "osxuniversal";
 }
 
-def publishType = project.findProperty("PublishType") ?: "";
-
 def artifactGroupId = 'org.atomstorm'
 def baseArtifactId = "coreml_jni"
 
-println("Building with JNI publish type: " + publishType);
+def jniType = project.findProperty("PublishType") ?: "";
+println("Building with JNI publish type: " + jniType);
 
 task nativeLibraryJar(type: Jar, dependsOn: copyNativeLibrary) {
-    archiveClassifier = nativeName + publishType
+    archiveClassifier = nativeName + jniType
     from outputsFolder
 }
 build.dependsOn nativeLibraryJar
 
 publishing {
+    repositories {
+        maven {
+            url ('https://maven.cloudsmith.io/atomstorm/coreml-jni' + (isDev ? '-snapshots' : ''))
+            credentials {
+                username System.getenv("ARTIFACTORY_USERNAME")
+                password System.getenv("ARTIFACTORY_API_KEY")
+            }
+        }
+    }
+
     publications {
         mavenJava(MavenPublication) {
             groupId = artifactGroupId
-            artifactId = baseArtifactId
-            version = pubVersion + (publishType ? "-" + publishType : "");
+            artifactId = "${baseArtifactId}-java"
+            version = pubVersion;
 
             from components.java
         }
         mavenJNI(MavenPublication) {
             groupId = artifactGroupId
-            artifactId = baseArtifactId
-            version = pubVersion + (publishType ? "-" + publishType : "");
+            artifactId = "${baseArtifactId}-jni"
+            version = pubVersion;
 
             artifact nativeLibraryJar
         }
+    }
+}
+
+tasks.withType(PublishToMavenRepository) {
+    doFirst {
+        println("Publishing coreml-jni to " + repository.url)
     }
 }
 

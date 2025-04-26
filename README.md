@@ -62,15 +62,12 @@ The built dynamic libraries will be installed to:
 
 ### Using the Artifacts
 
-Since the artifacts are published to GitHub Packages, you need to configure your `build.gradle` or `settings.gradle` to include the GitHub Packages Maven repository. Add the following to your `repositories` block:
+Since the artifacts are published to Cloudsmith, you need to configure your `build.gradle` or `settings.gradle` to include the Cloudsmith Maven repository. Add the following to your `repositories` block:
 
 ```gradle
 repositories {
     mavenCentral() // or jcenter()
-    maven {
-        name = "AtomStorm"
-        url = uri("https://maven.pkg.github.com/ATOM-STORM-6766/coreml_jni")
-    }
+    maven { url = "https://maven.cloudsmith.io/atomstorm/coreml-jni" }
 }
 ```
 
@@ -85,9 +82,7 @@ implementation("org.atomstorm:coreml_jni-java:$coremlVersion") {
 }
 ```
 
-The `$coremlVersion` should be replaced with the actual version number, which follows a format like `dev-v2025.0.0-10-xxx`. You can find this version number in the terminal output after running `./gradlew publishToMavenLocal`.
-
-Note: Make sure you have published the artifacts to your local Maven repository using `./gradlew publishToMavenLocal` before using them in other projects.
+The `$coremlVersion` should be replaced with the actual version number. You can find available versions on the Cloudsmith repository.
 
 ## Utility Scripts
 
