@@ -1,8 +1,12 @@
 apply plugin: 'maven-publish'
 
 def nativeName = wpilibTools.platformMapper.currentPlatform.platformName;
+if (nativeName.equals("macx64") || nativeName.equals("macarm64")) {
+    nativeName = "osxuniversal";
+}
+
 def artifactGroupId = 'org.photonvision'
-def baseArtifactId = "rknn_jni"
+def baseArtifactId = "coreml_jni"
 
 def jniType = project.findProperty("PublishType") ?: "";
 println("Building with JNI publish type: " + jniType);
@@ -16,10 +20,11 @@ build.dependsOn nativeLibraryJar
 publishing {
     repositories {
         maven {
-            url ('https://maven.photonvision.org/' + (isDev ? 'snapshots' : 'releases'))
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/${System.getenv("GITHUB_REPOSITORY") ?: "ATOM-STORM-6766/coreml_jni"}")
             credentials {
-                username 'ghactions'
-                password System.getenv("ARTIFACTORY_API_KEY")
+                username = System.getenv("GITHUB_ACTOR") ?: System.getenv("GITHUB_USERNAME") ?: "username"
+                password = System.getenv("GITHUB_TOKEN") ?: System.getenv("GITHUB_PASSWORD") ?: "password"
             }
         }
     }
@@ -44,6 +49,7 @@ publishing {
 
 tasks.withType(PublishToMavenRepository) {
     doFirst {
-        println("Publishing rknn-jni to " + repository.url)
+        println("Publishing coreml-jni to " + repository.url)
     }
 }
+

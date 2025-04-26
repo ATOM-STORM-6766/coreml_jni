@@ -1,42 +1,23 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.24)
 
-project(rknn_jni)
+project(coreml_jni CXX OBJC)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "-pthread")
 
-if (ENABLE_ASAN)
-	message(STATUS "BUILD WITH ADDRESS SANITIZER")
-	set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined")
-	set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined")
-	set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined")
-endif ()
+if(APPLE)
+    set(CMAKE_OBJCXX_STANDARD 17)
+    set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
+endif()
 
 set(BUILD_SHARED_LIBS ON)
 
-find_package(JNI)
-if(JNI_FOUND)
-    # Fixes odd AWT dependency
-    set(JNI_INCLUDE_DIRS ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
-    message(STATUS "JNI_INCLUDE_DIRS=${JNI_INCLUDE_DIRS}")
-endif()
-
-# skip 3rd-party lib dependencies
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--allow-shlib-undefined")
-
-# rknn api
-set(RKNN_RT_LIB ${CMAKE_SOURCE_DIR}/src/main/native/lib/librknnrt.so)
-
-#rga
-set(LIB_ARCH aarch64)
-set(RGA_PATH ${CMAKE_SOURCE_DIR}/src/main/native/lib/3rdparty/rga/RK3588)
-set(RGA_LIB ${RGA_PATH}/lib/Linux/${LIB_ARCH}/librga.so)
-
-
 set(OPENCV_YEAR "frc2025")
 set(OPENCV_VERSION "4.10.0-3")
-# also valid: windowsx86-64
+set(OPENCV_ARCH "osxuniversal")
 
 # type can be "", "debug", "static", or "staticdebug"
 set(OPENCV_TYPE "")
@@ -56,61 +37,99 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(opencv_header)
 
-# This probably doesn't work great with shared libraries, but I don't care about those right now
 file(GLOB_RECURSE OPENCV_LIB_PATH
-  "${opencv_lib_SOURCE_DIR}/**/*.lib"
-  "${opencv_lib_SOURCE_DIR}/**/*.so*"
+  "${opencv_lib_SOURCE_DIR}/**/*.dylib"
 )
+list(REMOVE_ITEM OPENCV_LIB_PATH "${opencv_lib_SOURCE_DIR}/osx/universal/shared/libopencv_java4100.dylib")
 SET(OPENCV_INCLUDE_PATH ${opencv_header_SOURCE_DIR})
-message("Depending on opencv ${OPENCV_LIB_PATH}")
+message("OpenCV libraries found: ${OPENCV_LIB_PATH}")
 
 
-set(CMAKE_INSTALL_RPATH "lib")
+set(FOUND_JNI FALSE)
+find_package(JNI)
+if(JNI_FOUND)
+    message(STATUS "JNI found by CMake: ${JNI_INCLUDE_DIRS}")
+    set(FOUND_JNI TRUE)
+else()
+    message(STATUS "CMake didn't find JNI, trying to find it manually")
+    find_package(Java REQUIRED)
+    if(Java_FOUND)
+        execute_process(
+            COMMAND bash -c "java -XshowSettings:properties -version 2>&1 | grep 'java.home' | cut -d '=' -f2 | tr -d '[:space:]'"
+            OUTPUT_VARIABLE JAVA_HOME_PATH
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE JAVA_CMD_RESULT
+        )
+        if(JAVA_CMD_RESULT EQUAL 0 AND NOT JAVA_HOME_PATH STREQUAL "")
+            message(STATUS "Found Java home: ${JAVA_HOME_PATH}")
+            set(JAVA_INCLUDE_PATH "${JAVA_HOME_PATH}/include")
+            if(APPLE)
+                set(JAVA_INCLUDE_PATH2 "${JAVA_INCLUDE_PATH}/darwin")
+            endif()
+            if(EXISTS "${JAVA_INCLUDE_PATH}" AND (NOT APPLE OR EXISTS "${JAVA_INCLUDE_PATH2}"))
+                set(JNI_INCLUDE_DIRS ${JAVA_INCLUDE_PATH} ${JAVA_INCLUDE_PATH2})
+                set(FOUND_JNI TRUE)
+                message(STATUS "JNI includes found manually: ${JNI_INCLUDE_DIRS}")
+            else()
+                message(WARNING "Java include directories not found at expected locations")
+            endif()
+        else()
+            message(WARNING "Failed to get Java home path using command line method")
+        endif()
+    endif()
+endif()
 
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
+if(NOT FOUND_JNI)
+    message(FATAL_ERROR "Could not find JNI includes using either CMake or manual methods")
+endif()
 
-add_library(${PROJECT_NAME}
-    src/main/native/cpp/rknn_jni.cpp
-    src/main/native/cpp/yolo_common.cpp
-    src/main/native/cpp/preprocess.cc
-    src/main/native/cpp/postprocess_v5.cc
-    src/main/native/cpp/postprocess_v8_11.cc
+file(GLOB_RECURSE SOURCES
+    "src/main/native/objc/*.cpp"
+    "src/main/native/objc/*.mm"
 )
 
+# Option to control the compile-time log level
+# 0: NONE, 1: ERROR, 2: INFO, 3: PERF, 4: DEBUG
+set(COMPILE_LOG_LEVEL 2 CACHE STRING "Set compile-time log level (0=NONE, 1=ERROR, 2=INFO, 3=PERF, 4=DEBUG)")
+message(STATUS "Compile Log Level set to: ${COMPILE_LOG_LEVEL}")
+
+add_library(${PROJECT_NAME} SHARED
+    ${SOURCES}
+)
 
 target_link_libraries(${PROJECT_NAME} PUBLIC
-    Threads::Threads
-    ${RKNN_RT_LIB}
     ${OPENCV_LIB_PATH}
-    ${RGA_LIB}
+    "-Wl,-rpath,@loader_path"
+)
+
+if(APPLE)
+    target_link_libraries(${PROJECT_NAME} PUBLIC
+        "-framework CoreML"
+        "-framework Vision"
+        "-framework Foundation"
+        "-framework AppKit"
+        "-framework CoreVideo"
     )
+endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${LIBRKNNRT_INCLUDES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/include/model_zoo
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/include/3rdparty/rga/RK3588/include
     ${JNI_INCLUDE_DIRS}
     ${OPENCV_INCLUDE_PATH}
 )
 
+# Pass the log level definition to the compiler
+target_compile_definitions(${PROJECT_NAME} PRIVATE CURRENT_LOG_LEVEL=${COMPILE_LOG_LEVEL})
+
+# Add Objective-C ARC compile options directly to the target
+if(APPLE)
+    target_compile_options(${PROJECT_NAME} PRIVATE "-fobjc-arc")
+endif()
+
 set_target_properties(${PROJECT_NAME}
     PROPERTIES
-        INSTALL_RPATH "\\\$ORIGIN/"
+        INSTALL_RPATH "@loader_path/"
 )
 
 include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME})
-install(FILES ${RKNN_RT_LIB} ${RGA_LIB} TYPE LIB)
-
-message("RGA is ${RGA_LIB}")
-
-add_executable(main_test src/main/native/cpp/main_test.cc)
-target_link_libraries(main_test ${PROJECT_NAME} ${RGA_LIB})
-target_include_directories(main_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/main/native/include/model_zoo
-    ${OPENCV_INCLUDE_PATH}
-)

@@ -1,3 +1,4 @@
+.idea
 build
 rknpu2
 cmake_build
@@ -5,3 +6,8 @@ cmake_build
 bin
 *.onnx
 *.jar
+.cache
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
