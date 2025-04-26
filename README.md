@@ -67,7 +67,7 @@ Since the artifacts are published to Cloudsmith, you need to configure your `bui
 ```gradle
 repositories {
     mavenCentral() // or jcenter()
-    maven { url = "https://maven.cloudsmith.io/atomstorm/coreml-jni" }
+    maven { url = "https://dl.cloudsmith.io/public/atomstorm/coreml-jni/maven/" }
 }
 ```
 
