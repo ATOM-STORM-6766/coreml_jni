@@ -62,7 +62,19 @@ The built dynamic libraries will be installed to:
 
 ### Using the Artifacts
 
-To use the built artifacts in your Gradle project, add the following dependencies to your `build.gradle` file:
+Since the artifacts are published to GitHub Packages, you need to configure your `build.gradle` or `settings.gradle` to include the GitHub Packages Maven repository. Add the following to your `repositories` block:
+
+```gradle
+repositories {
+    mavenCentral() // or jcenter()
+    maven {
+        name = "AtomStorm"
+        url = uri("https://maven.pkg.github.com/ATOM-STORM-6766/coreml_jni")
+    }
+}
+```
+
+Then, add the following dependencies to your `build.gradle` file:
 
 ```gradle
 implementation("org.atomstorm:coreml_jni-jni:$coremlVersion:osxuniversal") {

@@ -66,6 +66,11 @@ jobs:
           chmod +x gradlew
           ./gradlew build -PPublishType=${{ matrix.publish-type }} -x check
 
+      - name: Run tests
+        run: |
+          chmod +x gradlew
+          ./gradlew test
+
       - name: Publish to GitHub Packages
         if: github.event_name == 'push'
         run: |
@@ -84,14 +89,17 @@ jobs:
           path: cmake_build/*.dylib
 
       # Push to dev release on pushes to master
-      - uses: pyTooling/Actions/releaser@r0
+      - uses: softprops/action-gh-release@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: 'Dev'
-          rm: true
+          tag_name: Dev
+          name: Development Build
+          prerelease: true
           files: |
             cmake_build/*.dylib
-        if: github.event_name == 'push' && (startsWith(matrix.build-type, 'Release'))
+          body: |
+            This is an automatically generated development build from the latest main branch.
+            Build date: ${{ github.event.repository.updated_at }}
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (startsWith(matrix.build-type, 'Release'))
 
       # Push to actual release, if tagged
       - uses: softprops/action-gh-release@v1
