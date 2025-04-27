@@ -13,7 +13,7 @@ def finalVersion = pubVersion + (jniType.isEmpty() ? "" : "-${jniType}")
 println("Building with JNI publish type: " + jniType);
 
 task nativeLibraryJar(type: Jar, dependsOn: copyNativeLibrary) {
-    archiveClassifier = nativeName + jniType
+    archiveClassifier = nativeName
     from outputsFolder
 }
 build.dependsOn nativeLibraryJar
