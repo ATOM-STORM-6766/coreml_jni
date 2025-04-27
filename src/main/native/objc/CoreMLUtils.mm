@@ -4,36 +4,7 @@
 // Then include our headers
 #import "CoreMLUtils.h"
 #import "PixelBufferPool.h"
-
-// Define Log Levels (consistent with CoreMLDetector.mm)
-#ifndef CURRENT_LOG_LEVEL
-#define CURRENT_LOG_LEVEL 2 // Default to INFO level
-#endif
-
-#define LOG_LEVEL_NONE  0
-#define LOG_LEVEL_ERROR 1
-#define LOG_LEVEL_INFO  2
-#define LOG_LEVEL_PERF  3
-#define LOG_LEVEL_DEBUG 4
-
-// Conditional Logging Macros
-#if CURRENT_LOG_LEVEL >= LOG_LEVEL_ERROR
-#define LOG_ERROR(fmt, ...) NSLog((@"[ERROR][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#else
-#define LOG_ERROR(fmt, ...) do {} while(0)
-#endif
-
-#if CURRENT_LOG_LEVEL >= LOG_LEVEL_INFO
-#define LOG_INFO(fmt, ...) NSLog((@"[INFO][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#else
-#define LOG_INFO(fmt, ...) do {} while(0)
-#endif
-
-#if CURRENT_LOG_LEVEL >= LOG_LEVEL_DEBUG
-#define LOG_DEBUG(fmt, ...) NSLog((@"[DEBUG][%s:%d] " fmt), __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#else
-#define LOG_DEBUG(fmt, ...) do {} while(0)
-#endif
+#import "Log.h"
 
 @implementation CoreMLUtils
 
@@ -46,7 +17,7 @@
     CVPixelBufferRef pixelBuffer = [[PixelBufferPool sharedPool] getPixelBufferWithWidth:bgra.cols height:bgra.rows];
     if (!pixelBuffer) {
         LOG_ERROR("Failed to get pixel buffer from pool");
-        return NULL;
+        return nullptr;
     }
 
     // Lock the buffer for writing
