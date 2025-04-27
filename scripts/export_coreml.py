@@ -6,13 +6,13 @@ from ultralytics import YOLO
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Export a YOLO model (.pt) to CoreML format (.mlpackage) using ultralytics."
+        description="Export a YOLO model (.pt) to CoreML format (.mlmodel) using ultralytics."
     )
     parser.add_argument(
         "--input-file", type=Path, help="Path to the input PyTorch model file (.pt)."
     )
     parser.add_argument(
-        "--output-file", type=Path, help="Path to save the exported CoreML model file (.mlpackage)."
+        "--output-file", type=Path, help="Path to save the exported CoreML model file (.mlmodel)."
     )
     parser.add_argument(
         "--nms",
@@ -28,9 +28,9 @@ def main():
         print(f"Error: Input file '{input_file}' not found.")
         sys.exit(1)
 
-    if output_file.suffix.lower() != ".mlpackage":
+    if output_file.suffix.lower() != ".mlmodel":
         print(
-            f"Error: Output file must have a .mlpackage extension. Got: '{output_file}'"
+            f"Error: Output file must have a .mlmodel extension. Got: '{output_file}'"
         )
         sys.exit(1)
 
@@ -52,18 +52,18 @@ def main():
 
         # Perform the export. Ultralytics might save it to a default location first.
         # We'll handle moving/renaming if necessary after export.
-        model.export(format="coreml", nms=args.nms) # Export with or without NMS based on arg
+        model.export(format="mlmodel", nms=args.nms) # Export with or without NMS based on arg
 
         # Ultralytics>=8.0.131 typically saves the exported model in the same directory
-        # as the input model, with the name like 'yolov8n_coreml_model/yolov8n.mlpackage'.
-        # Or sometimes just 'yolov8n.mlpackage' in the CWD or a specific export dir.
+        # as the input model, with the name like 'yolov8n_coreml_model/yolov8n.mlmodel'.
+        # Or sometimes just 'yolov8n.mlmodel' in the CWD or a specific export dir.
         # We need to find the exported file.
         input_stem = input_file.stem
         expected_export_dir = Path.cwd() / f"{input_stem}_coreml_model"
-        expected_export_file = expected_export_dir / f"{input_stem}.mlpackage"
+        expected_export_file = expected_export_dir / f"{input_stem}.mlmodel"
 
         # Alternative potential location (newer ultralytics might save directly)
-        alt_export_file = Path.cwd() / f"{input_stem}.mlpackage"
+        alt_export_file = Path.cwd() / f"{input_stem}.mlmodel"
 
         exported_file_path = None
         if expected_export_file.is_file():
@@ -72,29 +72,18 @@ def main():
              exported_file_path = alt_export_file
         else:
             # Search common locations if the predictable paths don't work
-            possible_files = list(Path.cwd().glob(f"**/{input_stem}.mlpackage"))
+            possible_files = list(Path.cwd().glob(f"**/{input_stem}.mlmodel"))
             if possible_files:
                 exported_file_path = possible_files[0] # Take the first match
                 print(f"Found exported model at: {exported_file_path}")
             else:
-                 print("Error: Could not automatically find the exported .mlpackage file.")
+                 print("Error: Could not automatically find the exported .mlmodel file.")
                  print(f"Looked in: {expected_export_file}, {alt_export_file}, and CWD subdirs")
                  sys.exit(1)
 
         # Move the exported file to the desired output location
         exported_file_path.rename(output_file)
         print(f"Successfully moved exported model to '{output_file}'")
-
-        # Clean up the directory created by ultralytics if it exists and is empty
-        if expected_export_dir.is_dir():
-            try:
-                # Check if dir is empty (listdir will be empty)
-                if not any(expected_export_dir.iterdir()):
-                    expected_export_dir.rmdir()
-                    print(f"Removed empty export directory '{expected_export_dir}'")
-            except OSError as e:
-                print(f"Warning: Could not remove directory '{expected_export_dir}': {e}")
-
         print(f"Export complete: '{output_file}'")
 
     except Exception as e:
